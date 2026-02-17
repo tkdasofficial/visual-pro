@@ -6,15 +6,22 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AppLayout from "@/components/AppLayout";
-import FeaturePlaceholder from "@/components/FeaturePlaceholder";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import CreatePage from "@/pages/CreatePage";
+import CharacterPage from "@/pages/CharacterPage";
+import StructuredPage from "@/pages/StructuredPage";
+import DesignStudioPage from "@/pages/DesignStudioPage";
+import EditorPage from "@/pages/EditorPage";
+import StyleTransferPage from "@/pages/StyleTransferPage";
+import MotionPage from "@/pages/MotionPage";
+import AssetsPage from "@/pages/AssetsPage";
+import PromptLabPage from "@/pages/PromptLabPage";
+import BatchPage from "@/pages/BatchPage";
 import TermsPage from "@/pages/TermsPage";
 import PrivacyPage from "@/pages/PrivacyPage";
 import NotFound from "@/pages/NotFound";
-import { Users, LayoutGrid, Palette, PenTool, Layers, Film, Package, FlaskConical, Repeat } from "lucide-react";
 
 const queryClient = new QueryClient();
 
@@ -42,15 +49,15 @@ const App = () => (
             <Route path="/privacy" element={<PrivacyPage />} />
 
             <Route path="/create" element={<ProtectedPage><CreatePage /></ProtectedPage>} />
-            <Route path="/character" element={<ProtectedPage><FeaturePlaceholder title="Character Engine" description="Generate consistent characters across scenes with face identity lock, pose selection, and emotion control." icon={Users} /></ProtectedPage>} />
-            <Route path="/structured" element={<ProtectedPage><FeaturePlaceholder title="Precision Composer" description="High-control scene generation with field-based structured input and layer priority configuration." icon={LayoutGrid} /></ProtectedPage>} />
-            <Route path="/advanced" element={<ProtectedPage><FeaturePlaceholder title="Design Studio" description="Logo creation, thumbnail generation, poster mode, and brand-focused design tools." icon={Palette} /></ProtectedPage>} />
-            <Route path="/edit" element={<ProtectedPage><FeaturePlaceholder title="AI Editor" description="Inpainting, outpainting, object removal, background replacement, and AI upscaling." icon={PenTool} /></ProtectedPage>} />
-            <Route path="/style" element={<ProtectedPage><FeaturePlaceholder title="Style Transfer" description="Apply artistic or cinematic styles to existing images with intensity control." icon={Layers} /></ProtectedPage>} />
-            <Route path="/motion" element={<ProtectedPage><FeaturePlaceholder title="Motion Designer" description="Cinematic frame design with camera simulation, parallax, and loop animation export." icon={Film} /></ProtectedPage>} />
-            <Route path="/assets" element={<ProtectedPage><FeaturePlaceholder title="Asset Generator" description="Game-ready icons, UI illustrations, sprite sheets, and consistent asset packs." icon={Package} /></ProtectedPage>} />
-            <Route path="/prompt-lab" element={<ProtectedPage><FeaturePlaceholder title="Prompt Lab" description="Advanced prompt optimization with analysis, auto-enhancement, and A/B comparison." icon={FlaskConical} /></ProtectedPage>} />
-            <Route path="/batch" element={<ProtectedPage><FeaturePlaceholder title="Batch Generation" description="High-volume generation with CSV upload, style-locked mode, and ZIP export." icon={Repeat} /></ProtectedPage>} />
+            <Route path="/character" element={<ProtectedPage><CharacterPage /></ProtectedPage>} />
+            <Route path="/structured" element={<ProtectedPage><StructuredPage /></ProtectedPage>} />
+            <Route path="/advanced" element={<ProtectedPage><DesignStudioPage /></ProtectedPage>} />
+            <Route path="/edit" element={<ProtectedPage><EditorPage /></ProtectedPage>} />
+            <Route path="/style" element={<ProtectedPage><StyleTransferPage /></ProtectedPage>} />
+            <Route path="/motion" element={<ProtectedPage><MotionPage /></ProtectedPage>} />
+            <Route path="/assets" element={<ProtectedPage><AssetsPage /></ProtectedPage>} />
+            <Route path="/prompt-lab" element={<ProtectedPage><PromptLabPage /></ProtectedPage>} />
+            <Route path="/batch" element={<ProtectedPage><BatchPage /></ProtectedPage>} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>
