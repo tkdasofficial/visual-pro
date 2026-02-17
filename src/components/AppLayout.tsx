@@ -1,4 +1,5 @@
 import { useState } from "react";
+import logoSvg from "@/assets/logo.svg";
 import { Link, useLocation } from "react-router-dom";
 import {
   Wand2,
@@ -60,6 +61,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Logo */}
         <div className="flex h-14 items-center justify-between border-b border-border px-4">
           <Link to="/create" className="flex items-center gap-2">
+            <img src={logoSvg} alt="Visual Pro" className="h-7 w-7" />
             <span className="text-lg font-bold tracking-tight text-foreground">
               Visual Pro
             </span>
