@@ -14,16 +14,238 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      audit_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          details: Json | null
+          id: string
+          ip_address: string | null
+          target_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          target_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          target_id?: string | null
+        }
+        Relationships: []
+      }
+      credits: {
+        Row: {
+          balance: number
+          id: string
+          last_reset_at: string
+          total_earned: number
+          total_used: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          balance?: number
+          id?: string
+          last_reset_at?: string
+          total_earned?: number
+          total_used?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          balance?: number
+          id?: string
+          last_reset_at?: string
+          total_earned?: number
+          total_used?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      generation_logs: {
+        Row: {
+          created_at: string
+          credits_used: number
+          expires_at: string
+          id: string
+          image_url: string | null
+          metadata: Json | null
+          model: string
+          page: string
+          prompt: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits_used?: number
+          expires_at?: string
+          id?: string
+          image_url?: string | null
+          metadata?: Json | null
+          model?: string
+          page: string
+          prompt: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credits_used?: number
+          expires_at?: string
+          id?: string
+          image_url?: string | null
+          metadata?: Json | null
+          model?: string
+          page?: string
+          prompt?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          credits_daily_limit: number
+          department: string | null
+          full_name: string | null
+          id: string
+          is_employee: boolean
+          is_suspended: boolean
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          referral_code: string | null
+          referred_by: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          credits_daily_limit?: number
+          department?: string | null
+          full_name?: string | null
+          id?: string
+          is_employee?: boolean
+          is_suspended?: boolean
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          referral_code?: string | null
+          referred_by?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          credits_daily_limit?: number
+          department?: string | null
+          full_name?: string | null
+          id?: string
+          is_employee?: boolean
+          is_suspended?: boolean
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          referral_code?: string | null
+          referred_by?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_referred_by_fkey"
+            columns: ["referred_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      referrals: {
+        Row: {
+          created_at: string
+          credits_awarded: number
+          id: string
+          referred_id: string
+          referrer_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits_awarded?: number
+          id?: string
+          referred_id: string
+          referrer_id: string
+        }
+        Update: {
+          created_at?: string
+          credits_awarded?: number
+          id?: string
+          referred_id?: string
+          referrer_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          assigned_by: string | null
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          assigned_by?: string | null
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_priority: { Args: { _user_id: string }; Returns: number }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role:
+        | "owner"
+        | "ceo"
+        | "super_admin"
+        | "director"
+        | "manager"
+        | "support"
+        | "analyst"
+        | "viewer"
+        | "user"
+      subscription_plan: "free" | "pro" | "business"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +372,19 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: [
+        "owner",
+        "ceo",
+        "super_admin",
+        "director",
+        "manager",
+        "support",
+        "analyst",
+        "viewer",
+        "user",
+      ],
+      subscription_plan: ["free", "pro", "business"],
+    },
   },
 } as const
