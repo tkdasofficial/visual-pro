@@ -1,1 +1,10 @@
 project_id = "uykxumsecnpwljgxcvdb"
+
+[functions.generate-image]
+verify_jwt = false
+
+[functions.admin-actions]
+verify_jwt = false
+
+[functions.daily-credit-reset]
+verify_jwt = false

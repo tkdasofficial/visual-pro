@@ -19,6 +19,7 @@ import MotionPage from "@/pages/MotionPage";
 import AssetsPage from "@/pages/AssetsPage";
 import PromptLabPage from "@/pages/PromptLabPage";
 import BatchPage from "@/pages/BatchPage";
+import AdminPage from "@/pages/AdminPage";
 import TermsPage from "@/pages/TermsPage";
 import PrivacyPage from "@/pages/PrivacyPage";
 import NotFound from "@/pages/NotFound";
@@ -58,6 +59,7 @@ const App = () => (
             <Route path="/assets" element={<ProtectedPage><AssetsPage /></ProtectedPage>} />
             <Route path="/prompt-lab" element={<ProtectedPage><PromptLabPage /></ProtectedPage>} />
             <Route path="/batch" element={<ProtectedPage><BatchPage /></ProtectedPage>} />
+            <Route path="/admin" element={<ProtectedPage><AdminPage /></ProtectedPage>} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>
@@ -68,3 +70,4 @@ const App = () => (
 );
 
 export default App;
+

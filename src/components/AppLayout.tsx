@@ -15,9 +15,12 @@ import {
   Menu,
   X,
   LogOut,
+  Shield,
+  Coins,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 const navItems = [
   { path: "/create", label: "Create", icon: Wand2 },
@@ -36,6 +39,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { credits, isAdmin } = useAuth();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -95,11 +99,36 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
+
+            {/* Admin Panel link for staff */}
+            {isAdmin && (
+              <Link
+                to="/admin"
+                onClick={() => setSidebarOpen(false)}
+                className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150 ${
+                  location.pathname === "/admin"
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <Shield className="h-4 w-4" />
+                Admin Panel
+              </Link>
+            )}
           </div>
         </nav>
 
         {/* Footer */}
         <div className="border-t border-border p-3">
+          {/* Credits display */}
+          {credits !== null && (
+            <div className="mb-2 flex items-center gap-2 rounded-lg bg-muted px-3 py-2">
+              <Coins className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">{credits?.balance ?? 0}</span> credits
+              </span>
+            </div>
+          )}
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"

@@ -2,10 +2,12 @@ import { useState } from "react";
 import {
   Wand2,
   Settings2,
-  Image,
   ChevronDown,
   Sparkles,
 } from "lucide-react";
+import CustomSelect from "@/components/CustomSelect";
+import ImageCanvas from "@/components/ImageCanvas";
+import { useGenerate } from "@/hooks/useGenerate";
 
 const stylePresets = [
   "Cinematic", "Realistic", "Anime", "3D Render", "Illustration",
@@ -24,12 +26,24 @@ export default function CreatePage() {
   const [guidanceScale, setGuidanceScale] = useState(7.5);
   const [creativity, setCreativity] = useState(50);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [generating, setGenerating] = useState(false);
 
-  const handleGenerate = () => {
-    if (!prompt.trim()) return;
-    setGenerating(true);
-    setTimeout(() => setGenerating(false), 2000);
+  const { generating, generatedImage, generatedFileName, generate, downloadImage, clearImage } = useGenerate();
+
+  const handleGenerate = async () => {
+    await generate({
+      prompt,
+      negativePrompt,
+      page: "create",
+      style: selectedStyle,
+      aspectRatio: selectedRatio,
+      model: "google/gemini-2.5-flash-image",
+    });
+  };
+
+  const handleDownload = () => {
+    if (generatedImage && generatedFileName) {
+      downloadImage(generatedImage, generatedFileName);
+    }
   };
 
   return (
@@ -109,21 +123,12 @@ export default function CreatePage() {
           {/* Resolution */}
           <div>
             <label className="mb-2 block text-sm font-medium text-foreground">Resolution</label>
-            <div className="flex gap-1.5">
-              {resolutions.map((res) => (
-                <button
-                  key={res}
-                  onClick={() => setSelectedResolution(res)}
-                  className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors duration-150 ${
-                    selectedResolution === res
-                      ? "bg-accent text-accent-foreground"
-                      : "border border-border bg-secondary text-secondary-foreground hover:bg-muted"
-                  }`}
-                >
-                  {res}
-                </button>
-              ))}
-            </div>
+            <CustomSelect
+              label="Resolution"
+              value={selectedResolution}
+              options={resolutions}
+              onChange={setSelectedResolution}
+            />
           </div>
 
           {/* Advanced Controls */}
@@ -204,19 +209,13 @@ export default function CreatePage() {
       </div>
 
       {/* Canvas Area */}
-      <div className="flex flex-1 items-center justify-center p-6">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
-            <Image className="h-7 w-7 text-muted-foreground" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-foreground">Ready to Generate</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Enter a prompt and click Generate to create your image.
-            </p>
-          </div>
-        </div>
-      </div>
+      <ImageCanvas
+        imageUrl={generatedImage}
+        fileName={generatedFileName}
+        generating={generating}
+        onDownload={handleDownload}
+        onClear={clearImage}
+      />
     </div>
   );
 }
