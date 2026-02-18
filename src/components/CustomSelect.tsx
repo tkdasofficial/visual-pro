@@ -6,9 +6,11 @@ interface CustomSelectOption {
   label: string;
 }
 
+export type { CustomSelectOption };
+
 interface CustomSelectProps {
   label?: string;
-  options: CustomSelectOption[];
+  options: CustomSelectOption[] | string[];
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
@@ -55,7 +57,11 @@ export default function CustomSelect({
     }
   };
 
-  const selectedLabel = options.find((o) => o.value === value)?.label;
+  const normalizedOptions: CustomSelectOption[] = options.map((o) =>
+    typeof o === "string" ? { value: o, label: o } : o
+  );
+
+  const selectedLabel = normalizedOptions.find((o) => o.value === value)?.label;
 
   return (
     <div ref={containerRef} className={`relative ${className}`}>
@@ -88,7 +94,7 @@ export default function CustomSelect({
           className="absolute z-50 mt-1 w-full origin-top animate-scale-in rounded-lg border border-border bg-popover p-1 shadow-md"
           style={{ animationDuration: "150ms" }}
         >
-          {options.map((option) => {
+          {normalizedOptions.map((option) => {
             const isSelected = option.value === value;
             return (
               <button
