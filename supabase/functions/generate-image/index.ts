@@ -7,22 +7,109 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// ── Gemini fallback key cycling ──────────────────────────────────────────────
+function getGeminiKeys(): string[] {
+  return [
+    Deno.env.get("GEMINI_API_KEY_1"),
+    Deno.env.get("GEMINI_API_KEY_2"),
+    Deno.env.get("GEMINI_API_KEY_3"),
+    Deno.env.get("GEMINI_API_KEY_4"),
+    Deno.env.get("GEMINI_API_KEY_5"),
+    Deno.env.get("GEMINI_API_KEY_6"),
+    Deno.env.get("GEMINI_API_KEY_7"),
+  ].filter(Boolean) as string[];
+}
+
+async function generateViaGemini(prompt: string, geminiKeys: string[]): Promise<string | null> {
+  // Shuffle to distribute load across keys
+  const keys = [...geminiKeys].sort(() => Math.random() - 0.5);
+
+  for (const key of keys) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${key}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error(`Gemini key attempt failed (${res.status}): ${errText.slice(0, 200)}`);
+        continue; // try next key
+      }
+
+      const data = await res.json();
+      const part = data?.candidates?.[0]?.content?.parts?.find(
+        (p: any) => p.inlineData?.mimeType?.startsWith("image/")
+      );
+      if (part?.inlineData?.data) {
+        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+      }
+    } catch (err) {
+      console.error("Gemini key error:", err);
+      continue;
+    }
+  }
+  return null;
+}
+
+// ── Primary: Lovable AI gateway ──────────────────────────────────────────────
+async function generateViaLovable(apiKey: string, prompt: string, inputImageUrl?: string): Promise<string | null> {
+  const messages: any[] = [
+    {
+      role: "user",
+      content: inputImageUrl
+        ? [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: inputImageUrl } },
+          ]
+        : prompt,
+    },
+  ];
+
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash-image",
+      messages,
+      modalities: ["image", "text"],
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error("Primary AI error:", res.status, errText.slice(0, 200));
+    return null;
+  }
+
+  const data = await res.json();
+  return data.choices?.[0]?.message?.images?.[0]?.image_url?.url ?? null;
+}
+
+// ── Main handler ─────────────────────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
-
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Get auth user
+    // Auth check
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -32,50 +119,40 @@ serve(async (req) => {
 
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Check credits
+    // Credits check
     const { data: credits } = await supabase
-      .from("credits")
-      .select("balance")
-      .eq("user_id", user.id)
-      .single();
+      .from("credits").select("balance").eq("user_id", user.id).single();
 
     if (!credits || credits.balance < 1) {
       return new Response(JSON.stringify({ error: "Insufficient credits. Please upgrade your plan." }), {
-        status: 402,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Check if user is suspended
+    // Suspension check
     const { data: profile } = await supabase
-      .from("profiles")
-      .select("is_suspended")
-      .eq("user_id", user.id)
-      .single();
+      .from("profiles").select("is_suspended").eq("user_id", user.id).single();
 
     if (profile?.is_suspended) {
       return new Response(JSON.stringify({ error: "Account suspended. Contact support." }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const body = await req.json();
-    const { prompt, negativePrompt, page, style, aspectRatio, model: requestedModel, imageUrl: inputImageUrl } = body;
+    const { prompt, negativePrompt, page, style, aspectRatio, imageUrl: inputImageUrl } = body;
 
     if (!prompt?.trim()) {
       return new Response(JSON.stringify({ error: "Prompt is required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Build the enhanced prompt
+    // Build enhanced prompt (internal only, never returned to client)
     const enhancedPrompt = [
       style ? `Style: ${style}.` : "",
       prompt,
@@ -84,22 +161,6 @@ serve(async (req) => {
       "Ultra high resolution, professional quality.",
     ].filter(Boolean).join(" ");
 
-    // Choose model: Nano banana (gemini-2.5-flash-image) for image-to-image, else gemini-2.5-flash-image for text-to-image
-    const model = requestedModel || "google/gemini-2.5-flash-image";
-
-    // Build messages
-    const messages: any[] = [
-      {
-        role: "user",
-        content: inputImageUrl
-          ? [
-              { type: "text", text: enhancedPrompt },
-              { type: "image_url", image_url: { url: inputImageUrl } },
-            ]
-          : enhancedPrompt,
-      },
-    ];
-
     // Insert generation log (pending)
     const { data: logEntry } = await supabase
       .from("generation_logs")
@@ -107,62 +168,34 @@ serve(async (req) => {
         user_id: user.id,
         page: page || "create",
         prompt,
-        model,
+        model: "visual-pro-engine", // internal label, never exposed
         status: "pending",
         credits_used: 1,
         metadata: { style, aspectRatio, negativePrompt },
       })
-      .select()
-      .single();
+      .select().single();
 
-    // Call Lovable AI Gateway
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ model, messages, modalities: ["image", "text"] }),
-    });
+    // ── Try primary AI first, then fallback ──────────────────────────────────
+    let generatedImage: string | null = null;
 
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      console.error("AI gateway error:", aiResponse.status, errText);
-
-      if (aiResponse.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please wait and try again." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ error: "AI service payment required." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      // Update log to failed
-      if (logEntry) {
-        await supabase.from("generation_logs").update({ status: "failed" }).eq("id", logEntry.id);
-      }
-
-      return new Response(JSON.stringify({ error: "Image generation failed. Please try again." }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (LOVABLE_API_KEY) {
+      generatedImage = await generateViaLovable(LOVABLE_API_KEY, enhancedPrompt, inputImageUrl);
     }
 
-    const aiData = await aiResponse.json();
-    const generatedImage = aiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    // Fallback: cycle Gemini keys
+    if (!generatedImage) {
+      const geminiKeys = getGeminiKeys();
+      if (geminiKeys.length > 0) {
+        generatedImage = await generateViaGemini(enhancedPrompt, geminiKeys);
+      }
+    }
 
     if (!generatedImage) {
       if (logEntry) {
         await supabase.from("generation_logs").update({ status: "failed" }).eq("id", logEntry.id);
       }
-      return new Response(JSON.stringify({ error: "No image was generated. Please try a different prompt." }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return new Response(JSON.stringify({ error: "Image generation failed. Please try again." }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -174,57 +207,35 @@ serve(async (req) => {
 
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from("generated-images")
-      .upload(fileName, imageBuffer, {
-        contentType: "image/png",
-        upsert: false,
-      });
+      .upload(fileName, imageBuffer, { contentType: "image/png", upsert: false });
 
-    let publicUrl = generatedImage; // fallback to base64
+    let publicUrl = generatedImage;
     if (!uploadError && uploadData) {
       const { data: urlData } = supabase.storage.from("generated-images").getPublicUrl(fileName);
       publicUrl = urlData.publicUrl;
     }
 
-    // Deduct credit and update log
+    // Deduct credit & update log
     await Promise.all([
-      supabase.from("credits").update({
-        balance: credits.balance - 1,
-        total_used: supabase.rpc ? undefined : undefined, // handled below
-      }).eq("user_id", user.id),
+      supabase.from("credits").update({ balance: credits.balance - 1 }).eq("user_id", user.id),
       logEntry
-        ? supabase.from("generation_logs").update({
-            status: "completed",
-            image_url: publicUrl,
-          }).eq("id", logEntry.id)
+        ? supabase.from("generation_logs").update({ status: "completed", image_url: publicUrl }).eq("id", logEntry.id)
         : Promise.resolve(),
     ]);
-
-    // Separately update total_used
-    await supabase.rpc("increment_credits_used", { p_user_id: user.id }).catch(() => {
-      // If function doesn't exist, do direct update
-      supabase.from("credits").update({ balance: credits.balance - 1 }).eq("user_id", user.id);
-    });
 
     return new Response(
       JSON.stringify({
         imageUrl: publicUrl,
         fileName: `visual-pro-${randomNum}.png`,
         creditsRemaining: credits.balance - 1,
-        logId: logEntry?.id,
       }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("generate-image error:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
