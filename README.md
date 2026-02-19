@@ -1,73 +1,110 @@
-# Welcome to your Lovable project
+# Visual Pro – AI Image Generation Platform
 
-## Project info
+![Visual Pro Banner](https://visual-pro.netlify.app/og-icon.png)
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+Visual Pro is a professional AI-powered image generation platform built by **Avzio**.  
+It enables creators, developers, marketers, and businesses to generate high-quality AI visuals instantly.
 
-## How can I edit this code?
+🌐 Live App: https://visual-pro.netlify.app/
 
-There are several ways of editing your application.
+---
 
-**Use Lovable**
+## 🚀 About Visual Pro
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+Visual Pro is designed to provide:
 
-Changes made via Lovable will be committed automatically to this repo.
+- 🎨 AI Image Generation
+- 🎬 Cinematic Visual Creation
+- 🖼 Concept Art Rendering
+- 📱 Social Media Ready Graphics
+- ⚡ Fast, Secure Web-Based Interface
+- 🔐 Authentication & Backend Integration
 
-**Use your preferred IDE**
+Built for modern creators who need high-quality AI visuals without complexity.
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+---
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## 🏢 Built By
 
-Follow these steps:
+**Avzio**  
+A technology-focused company building scalable AI-powered web applications.
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+---
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## 🛠 Tech Stack
 
-# Step 3: Install the necessary dependencies.
-npm i
+- Frontend: React + TypeScript
+- Backend: Supabase
+- Hosting: Netlify
+- Authentication: Google OAuth
+- AI Integration: API-based image generation
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+---
 
-**Edit a file directly in GitHub**
+## 🌎 SEO Keywords
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+AI image generator  
+AI art generator  
+Cinematic AI visuals  
+Concept art AI  
+AI design platform  
+Visual Pro  
+Avzio AI tools  
 
-**Use GitHub Codespaces**
+---
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## 📦 Features
 
-## What technologies are used for this project?
+✔ Secure Google Authentication  
+✔ AI Image Generation  
+✔ Fast Rendering  
+✔ Clean Modern UI  
+✔ Production-Ready Deployment  
+✔ SEO Optimized Web App  
 
-This project is built with:
+---
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## 🔒 Security & Performance
 
-## How can I deploy this project?
+Visual Pro follows modern best practices for:
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+- Secure authentication
+- API protection
+- Optimized asset loading
+- SEO meta integration
+- Social media preview optimization (Open Graph + Twitter Cards)
 
-## Can I connect a custom domain to my Lovable project?
+---
 
-Yes, you can!
+## 📈 Roadmap
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+- Advanced AI Models
+- Custom Style Presets
+- Credit System Expansion
+- Premium Subscription Tier
+- API Access for Developers
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+---
+
+## 💡 Why Visual Pro?
+
+Visual Pro is built with performance, scalability, and professional branding in mind.  
+Unlike basic AI tools, it focuses on clean UI, fast deployment, and commercial-ready outputs.
+
+---
+
+## 📬 Connect
+
+Website: https://visual-pro.netlify.app/  
+Company: Avzio  
+
+---
+
+## ⭐ Support
+
+If you like this project, consider starring the repository.  
+It helps grow the Visual Pro ecosystem.
+
+---
+
+© 2026 Avzio. All Rights Reserved.
