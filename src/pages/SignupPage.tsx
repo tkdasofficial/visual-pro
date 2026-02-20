@@ -1,10 +1,11 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Gift } from "lucide-react";
 
 export default function SignupPage() {
   const navigate = useNavigate();
+  const { code } = useParams<{ code?: string }>();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -12,6 +13,11 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [referralCode, setReferralCode] = useState("");
+
+  useEffect(() => {
+    if (code) setReferralCode(code);
+  }, [code]);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,7 +30,12 @@ export default function SignupPage() {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName } },
+      options: {
+        data: {
+          full_name: fullName,
+          ...(referralCode ? { referral_code: referralCode } : {}),
+        },
+      },
     });
     if (error) {
       setError(error.message);
@@ -48,6 +59,16 @@ export default function SignupPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Visual Pro</h1>
           <p className="mt-1 text-sm text-muted-foreground">Create your account</p>
         </div>
+
+        {/* Referral bonus banner */}
+        {referralCode && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2.5">
+            <Gift className="h-4 w-4 shrink-0 text-accent" />
+            <p className="text-xs text-foreground">
+              <strong>Welcome!</strong> Sign up now and receive <strong>10 bonus credits</strong> — on us!
+            </p>
+          </div>
+        )}
 
         <form onSubmit={handleSignup} className="space-y-4">
           {error && (

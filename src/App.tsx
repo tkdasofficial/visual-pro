@@ -45,6 +45,7 @@ const App = () => (
             <Route path="/" element={<Navigate to="/create" replace />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
+            <Route path="/invite/:code" element={<SignupPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
@@ -70,4 +71,3 @@ const App = () => (
 );
 
 export default App;
-

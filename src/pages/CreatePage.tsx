@@ -9,6 +9,42 @@ import CustomSelect from "@/components/CustomSelect";
 import ImageCanvas from "@/components/ImageCanvas";
 import { useGenerate } from "@/hooks/useGenerate";
 
+function StyleSelector({ selected, onSelect, options }: { selected: string; onSelect: (s: string) => void; options: string[] }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-medium text-foreground">Style</label>
+      {!expanded ? (
+        <button
+          onClick={() => setExpanded(true)}
+          className="flex w-full items-center justify-between rounded-lg border border-border bg-accent/5 px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent/10"
+        >
+          <span>{selected}</span>
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+        </button>
+      ) : (
+        <div className="flex flex-wrap gap-1.5 animate-fade-in">
+          {options.map((style) => (
+            <button
+              key={style}
+              onClick={() => { onSelect(style); setExpanded(false); }}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors duration-150 ${
+                selected === style
+                  ? "bg-accent text-accent-foreground"
+                  : "border border-border bg-secondary text-secondary-foreground hover:bg-muted"
+              }`}
+            >
+              {style}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+
 const stylePresets = [
   "Cinematic", "Realistic", "Anime", "3D Render", "Illustration",
   "Fantasy", "Abstract", "Minimal", "Photography", "Concept Art",
@@ -80,25 +116,8 @@ export default function CreatePage() {
             />
           </div>
 
-          {/* Style Presets */}
-          <div>
-            <label className="mb-2 block text-sm font-medium text-foreground">Style</label>
-            <div className="flex flex-wrap gap-1.5">
-              {stylePresets.map((style) => (
-                <button
-                  key={style}
-                  onClick={() => setSelectedStyle(style)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors duration-150 ${
-                    selectedStyle === style
-                      ? "bg-accent text-accent-foreground"
-                      : "border border-border bg-secondary text-secondary-foreground hover:bg-muted"
-                  }`}
-                >
-                  {style}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Style Presets - Dynamic Toggle */}
+          <StyleSelector selected={selectedStyle} onSelect={setSelectedStyle} options={stylePresets} />
 
           {/* Aspect Ratio */}
           <div>
