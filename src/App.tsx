@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import AdminRoute from "@/components/AdminRoute";
 import AppLayout from "@/components/AppLayout";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
@@ -20,13 +21,18 @@ import AssetsPage from "@/pages/AssetsPage";
 import PromptLabPage from "@/pages/PromptLabPage";
 import BatchPage from "@/pages/BatchPage";
 import AdminPage from "@/pages/AdminPage";
+import AccountSettingsPage from "@/pages/AccountSettingsPage";
+import ReferralPage from "@/pages/ReferralPage";
+import PlansPage from "@/pages/PlansPage";
+import HistoryPage from "@/pages/HistoryPage";
+import FeedbackPage from "@/pages/FeedbackPage";
 import TermsPage from "@/pages/TermsPage";
 import PrivacyPage from "@/pages/PrivacyPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
 
-function ProtectedPage({ children }: { children: React.ReactNode }) {
+function UserPage({ children }: { children: React.ReactNode }) {
   return (
     <ProtectedRoute>
       <AppLayout>{children}</AppLayout>
@@ -50,17 +56,27 @@ const App = () => (
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
 
-            <Route path="/create" element={<ProtectedPage><CreatePage /></ProtectedPage>} />
-            <Route path="/character" element={<ProtectedPage><CharacterPage /></ProtectedPage>} />
-            <Route path="/structured" element={<ProtectedPage><StructuredPage /></ProtectedPage>} />
-            <Route path="/advanced" element={<ProtectedPage><DesignStudioPage /></ProtectedPage>} />
-            <Route path="/edit" element={<ProtectedPage><EditorPage /></ProtectedPage>} />
-            <Route path="/style" element={<ProtectedPage><StyleTransferPage /></ProtectedPage>} />
-            <Route path="/motion" element={<ProtectedPage><MotionPage /></ProtectedPage>} />
-            <Route path="/assets" element={<ProtectedPage><AssetsPage /></ProtectedPage>} />
-            <Route path="/prompt-lab" element={<ProtectedPage><PromptLabPage /></ProtectedPage>} />
-            <Route path="/batch" element={<ProtectedPage><BatchPage /></ProtectedPage>} />
-            <Route path="/admin" element={<ProtectedPage><AdminPage /></ProtectedPage>} />
+            {/* Feature pages */}
+            <Route path="/create" element={<UserPage><CreatePage /></UserPage>} />
+            <Route path="/character" element={<UserPage><CharacterPage /></UserPage>} />
+            <Route path="/structured" element={<UserPage><StructuredPage /></UserPage>} />
+            <Route path="/advanced" element={<UserPage><DesignStudioPage /></UserPage>} />
+            <Route path="/edit" element={<UserPage><EditorPage /></UserPage>} />
+            <Route path="/style" element={<UserPage><StyleTransferPage /></UserPage>} />
+            <Route path="/motion" element={<UserPage><MotionPage /></UserPage>} />
+            <Route path="/assets" element={<UserPage><AssetsPage /></UserPage>} />
+            <Route path="/prompt-lab" element={<UserPage><PromptLabPage /></UserPage>} />
+            <Route path="/batch" element={<UserPage><BatchPage /></UserPage>} />
+
+            {/* Profile pages (full screen within layout) */}
+            <Route path="/account" element={<UserPage><AccountSettingsPage /></UserPage>} />
+            <Route path="/referral" element={<UserPage><ReferralPage /></UserPage>} />
+            <Route path="/plans" element={<UserPage><PlansPage /></UserPage>} />
+            <Route path="/history" element={<UserPage><HistoryPage /></UserPage>} />
+            <Route path="/feedback" element={<UserPage><FeedbackPage /></UserPage>} />
+
+            {/* Admin panel - separate route with admin-only access */}
+            <Route path="/admin/*" element={<AdminRoute><AdminPage /></AdminRoute>} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>

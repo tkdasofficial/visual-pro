@@ -72,7 +72,7 @@ export default function CreatePage() {
       page: "create",
       style: selectedStyle,
       aspectRatio: selectedRatio,
-      model: "google/gemini-2.5-flash-image",
+      // model selection handled server-side
     });
   };
 

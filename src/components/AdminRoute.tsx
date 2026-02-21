@@ -3,14 +3,13 @@ import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * ProtectedRoute for regular users.
- * Redirects admins (non-user roles) to /admin/dashboard.
- * Redirects unauthenticated users to /login.
+ * AdminRoute: Only allows users with admin roles (owner, ceo, super_admin, director, manager, support, analyst).
+ * Redirects regular users to /create. Redirects unauthenticated users to /login.
  */
-export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
+export default function AdminRoute({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
-  const [isAdminOnly, setIsAdminOnly] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const check = async () => {
@@ -22,29 +21,17 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
       }
       setAuthenticated(true);
 
-      // Check if user has admin roles but NOT user-level access
       const { data: roles } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", session.user.id);
 
-      const adminRoles = ["owner", "ceo", "super_admin", "director", "manager"];
-      const hasAdminRole = roles?.some((r) => adminRoles.includes(r.role)) ?? false;
-
-      // Admins with senior roles are redirected to admin panel
-      setIsAdminOnly(hasAdminRole);
+      const adminRoles = ["owner", "ceo", "super_admin", "director", "manager", "support", "analyst"];
+      const hasAdmin = roles?.some((r) => adminRoles.includes(r.role)) ?? false;
+      setIsAdmin(hasAdmin);
       setLoading(false);
     };
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        setAuthenticated(false);
-        setLoading(false);
-      }
-    });
-
     check();
-    return () => subscription.unsubscribe();
   }, []);
 
   if (loading) {
@@ -56,7 +43,7 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
   }
 
   if (!authenticated) return <Navigate to="/login" replace />;
-  if (isAdminOnly) return <Navigate to="/admin" replace />;
+  if (!isAdmin) return <Navigate to="/create" replace />;
 
   return <>{children}</>;
 }
