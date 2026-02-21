@@ -7,7 +7,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// ── Gemini fallback key cycling ──────────────────────────────────────────────
+// ── Gemini fallback key cycling ──
 function getGeminiKeys(): string[] {
   return [
     Deno.env.get("GEMINI_API_KEY_1"),
@@ -17,13 +17,12 @@ function getGeminiKeys(): string[] {
     Deno.env.get("GEMINI_API_KEY_5"),
     Deno.env.get("GEMINI_API_KEY_6"),
     Deno.env.get("GEMINI_API_KEY_7"),
+    Deno.env.get("GEMINI_API_KEY_8"),
   ].filter(Boolean) as string[];
 }
 
 async function generateViaGemini(prompt: string, geminiKeys: string[]): Promise<string | null> {
-  // Shuffle to distribute load across keys
   const keys = [...geminiKeys].sort(() => Math.random() - 0.5);
-
   for (const key of keys) {
     try {
       const res = await fetch(
@@ -37,13 +36,11 @@ async function generateViaGemini(prompt: string, geminiKeys: string[]): Promise<
           }),
         }
       );
-
       if (!res.ok) {
         const errText = await res.text();
-        console.error(`Gemini key attempt failed (${res.status}): ${errText.slice(0, 200)}`);
-        continue; // try next key
+        console.error(`Key attempt failed (${res.status}): ${errText.slice(0, 200)}`);
+        continue;
       }
-
       const data = await res.json();
       const part = data?.candidates?.[0]?.content?.parts?.find(
         (p: any) => p.inlineData?.mimeType?.startsWith("image/")
@@ -52,14 +49,13 @@ async function generateViaGemini(prompt: string, geminiKeys: string[]): Promise<
         return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
       }
     } catch (err) {
-      console.error("Gemini key error:", err);
+      console.error("Key error:", err);
       continue;
     }
   }
   return null;
 }
 
-// ── Primary: Lovable AI gateway ──────────────────────────────────────────────
 async function generateViaLovable(apiKey: string, prompt: string, inputImageUrl?: string): Promise<string | null> {
   const messages: any[] = [
     {
@@ -88,7 +84,7 @@ async function generateViaLovable(apiKey: string, prompt: string, inputImageUrl?
 
   if (!res.ok) {
     const errText = await res.text();
-    console.error("Primary AI error:", res.status, errText.slice(0, 200));
+    console.error("Primary error:", res.status, errText.slice(0, 200));
     return null;
   }
 
@@ -96,7 +92,22 @@ async function generateViaLovable(apiKey: string, prompt: string, inputImageUrl?
   return data.choices?.[0]?.message?.images?.[0]?.image_url?.url ?? null;
 }
 
-// ── Main handler ─────────────────────────────────────────────────────────────
+// ── Seed generator (8-digit) ──
+function generateSeed(): string {
+  return String(Math.floor(10000000 + Math.random() * 90000000));
+}
+
+// ── Plan-based expiry ──
+function getExpiryInterval(plan: string): string {
+  switch (plan) {
+    case "pro": return "3 days";
+    case "business": return "7 days";
+    case "enterprise": return "30 days";
+    default: return "24 hours";
+  }
+}
+
+// ── Main handler ──
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -105,7 +116,6 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Auth check
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -123,19 +133,17 @@ serve(async (req) => {
       });
     }
 
-    // Credits check
-    const { data: credits } = await supabase
-      .from("credits").select("balance").eq("user_id", user.id).single();
+    // Credits & profile check
+    const [{ data: credits }, { data: profile }] = await Promise.all([
+      supabase.from("credits").select("balance").eq("user_id", user.id).single(),
+      supabase.from("profiles").select("is_suspended, plan").eq("user_id", user.id).single(),
+    ]);
 
     if (!credits || credits.balance < 1) {
       return new Response(JSON.stringify({ error: "Insufficient credits. Please upgrade your plan." }), {
         status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    // Suspension check
-    const { data: profile } = await supabase
-      .from("profiles").select("is_suspended").eq("user_id", user.id).single();
 
     if (profile?.is_suspended) {
       return new Response(JSON.stringify({ error: "Account suspended. Contact support." }), {
@@ -152,7 +160,11 @@ serve(async (req) => {
       });
     }
 
-    // Build enhanced prompt (internal only, never returned to client)
+    // Generate unique seed
+    const seed = generateSeed();
+    const expiryInterval = getExpiryInterval(profile?.plan || "free");
+
+    // Build enhanced prompt
     const enhancedPrompt = [
       style ? `Style: ${style}.` : "",
       prompt,
@@ -161,28 +173,28 @@ serve(async (req) => {
       "Ultra high resolution, professional quality.",
     ].filter(Boolean).join(" ");
 
-    // Insert generation log (pending)
+    // Insert generation log
     const { data: logEntry } = await supabase
       .from("generation_logs")
       .insert({
         user_id: user.id,
         page: page || "create",
         prompt,
-        model: "visual-pro-engine", // internal label, never exposed
+        model: "visual-pro-engine",
         status: "pending",
         credits_used: 1,
-        metadata: { style, aspectRatio, negativePrompt },
+        expires_at: `now() + interval '${expiryInterval}'`,
+        metadata: { style, aspectRatio, negativePrompt, seed, watermark: "Visual Pro | Avzio" },
       })
       .select().single();
 
-    // ── Try primary AI first, then fallback ──────────────────────────────────
+    // Try primary AI, then fallback
     let generatedImage: string | null = null;
 
     if (LOVABLE_API_KEY) {
       generatedImage = await generateViaLovable(LOVABLE_API_KEY, enhancedPrompt, inputImageUrl);
     }
 
-    // Fallback: cycle Gemini keys
     if (!generatedImage) {
       const geminiKeys = getGeminiKeys();
       if (geminiKeys.length > 0) {
@@ -199,11 +211,10 @@ serve(async (req) => {
       });
     }
 
-    // Upload to Supabase Storage
+    // Upload to storage with seed-based naming
     const base64Data = generatedImage.replace(/^data:image\/\w+;base64,/, "");
     const imageBuffer = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
-    const randomNum = Math.floor(10000000 + Math.random() * 90000000);
-    const fileName = `${user.id}/visual-pro-${randomNum}.png`;
+    const fileName = `${user.id}/visual-pro-${seed}.png`;
 
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from("generated-images")
@@ -226,7 +237,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         imageUrl: publicUrl,
-        fileName: `visual-pro-${randomNum}.png`,
+        fileName: `visual-pro-${seed}.png`,
+        seed,
         creditsRemaining: credits.balance - 1,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

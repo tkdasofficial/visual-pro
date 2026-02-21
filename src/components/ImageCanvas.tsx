@@ -25,8 +25,8 @@ export default function ImageCanvas({
             <div className="h-7 w-7 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
           </div>
           <div>
-            <p className="text-sm font-medium text-foreground">Generating...</p>
-            <p className="mt-1 text-xs text-muted-foreground">Lovable AI is creating your image</p>
+            <p className="text-sm font-medium text-foreground">Creating your image…</p>
+            <p className="mt-1 text-xs text-muted-foreground">AI is generating your visual</p>
           </div>
         </div>
       </div>

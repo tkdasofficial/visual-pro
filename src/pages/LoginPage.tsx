@@ -15,12 +15,16 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       setError(error.message);
       setLoading(false);
-    } else {
-      navigate("/create");
+    } else if (data.user) {
+      // Check if admin - redirect accordingly
+      const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", data.user.id);
+      const adminRoles = ["owner", "ceo", "super_admin", "director", "manager"];
+      const isAdmin = roles?.some((r) => adminRoles.includes(r.role)) ?? false;
+      navigate(isAdmin ? "/admin" : "/create");
     }
   };
 
