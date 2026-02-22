@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AdminRoute from "@/components/AdminRoute";
+import AuthRedirect from "@/components/AuthRedirect";
 import AppLayout from "@/components/AppLayout";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
@@ -26,6 +27,9 @@ import ReferralPage from "@/pages/ReferralPage";
 import PlansPage from "@/pages/PlansPage";
 import HistoryPage from "@/pages/HistoryPage";
 import FeedbackPage from "@/pages/FeedbackPage";
+import NotificationsPage from "@/pages/NotificationsPage";
+import CheckoutPage from "@/pages/CheckoutPage";
+import SupportPage from "@/pages/SupportPage";
 import TermsPage from "@/pages/TermsPage";
 import PrivacyPage from "@/pages/PrivacyPage";
 import NotFound from "@/pages/NotFound";
@@ -49,9 +53,10 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Navigate to="/create" replace />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignupPage />} />
-            <Route path="/invite/:code" element={<SignupPage />} />
+            {/* Auth pages - redirect to /create if already logged in */}
+            <Route path="/login" element={<AuthRedirect><LoginPage /></AuthRedirect>} />
+            <Route path="/signup" element={<AuthRedirect><SignupPage /></AuthRedirect>} />
+            <Route path="/invite/:code" element={<AuthRedirect><SignupPage /></AuthRedirect>} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
@@ -68,14 +73,17 @@ const App = () => (
             <Route path="/prompt-lab" element={<UserPage><PromptLabPage /></UserPage>} />
             <Route path="/batch" element={<UserPage><BatchPage /></UserPage>} />
 
-            {/* Profile pages (full screen within layout) */}
+            {/* Profile pages */}
             <Route path="/account" element={<UserPage><AccountSettingsPage /></UserPage>} />
             <Route path="/referral" element={<UserPage><ReferralPage /></UserPage>} />
             <Route path="/plans" element={<UserPage><PlansPage /></UserPage>} />
             <Route path="/history" element={<UserPage><HistoryPage /></UserPage>} />
             <Route path="/feedback" element={<UserPage><FeedbackPage /></UserPage>} />
+            <Route path="/notifications" element={<UserPage><NotificationsPage /></UserPage>} />
+            <Route path="/checkout" element={<UserPage><CheckoutPage /></UserPage>} />
+            <Route path="/support" element={<UserPage><SupportPage /></UserPage>} />
 
-            {/* Admin panel - separate route with admin-only access */}
+            {/* Admin panel */}
             <Route path="/admin/*" element={<AdminRoute><AdminPage /></AdminRoute>} />
 
             <Route path="*" element={<NotFound />} />
