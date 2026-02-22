@@ -3,9 +3,10 @@ import logoSvg from "@/assets/logo.svg";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Wand2, Users, LayoutGrid, Palette, PenTool, Layers, Film,
-  Package, FlaskConical, Repeat, Menu, X, Bell, User,
+  Package, FlaskConical, Repeat, Menu, X, Bell, User, HeadphonesIcon,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useNotifications } from "@/hooks/useNotifications";
 
 const navItems = [
   { path: "/create", label: "Create", icon: Wand2 },
@@ -25,6 +26,7 @@ const profileMenuItems = [
   { path: "/referral", label: "Referral Program" },
   { path: "/plans", label: "Plans & Upgrade" },
   { path: "/history", label: "Generation History" },
+  { path: "/support", label: "Support" },
   { path: "/feedback", label: "Feedback" },
   { path: "/privacy", label: "Privacy Policy" },
   { path: "/terms", label: "Terms of Service" },
@@ -35,8 +37,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const { profile, credits, isAdmin } = useAuth();
-  const { user } = useAuth();
+  const { profile, credits, user } = useAuth();
+  const { unreadCount } = useNotifications(user?.id);
 
   const handleLogout = async () => {
     const { supabase } = await import("@/integrations/supabase/client");
@@ -57,7 +59,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        {/* Logo */}
         <div className="flex h-14 items-center justify-between border-b border-border px-4">
           <Link to="/create" className="flex items-center gap-2">
             <img src={logoSvg} alt="Visual Pro" className="h-7 w-7" />
@@ -68,7 +69,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 overflow-y-auto px-2 py-3">
           <div className="space-y-0.5">
             {navItems.map((item) => {
@@ -92,7 +92,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </nav>
 
-        {/* Footer */}
         <div className="border-t border-border p-3">
           <p className="px-3 text-[10px] text-muted-foreground">© 2026 Avzio. All rights reserved.</p>
         </div>
@@ -108,8 +107,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           <div className="ml-auto flex items-center gap-2">
             {/* Notifications */}
-            <button className="relative rounded-md p-1.5 text-muted-foreground hover:text-foreground">
-              <Bell className="h-4.5 w-4.5" />
+            <button
+              onClick={() => navigate("/notifications")}
+              className="relative rounded-md p-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <Bell className="h-[18px] w-[18px]" />
+              {unreadCount > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
             </button>
 
             {/* Profile dropdown */}
@@ -125,7 +132,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
                   <div className="absolute right-0 top-10 z-50 w-64 rounded-xl border border-border bg-popover p-2 shadow-lg">
-                    {/* User info */}
                     <div className="mb-2 rounded-lg bg-muted/50 px-3 py-2.5">
                       <p className="truncate text-sm font-medium text-foreground">{profile?.full_name || "User"}</p>
                       <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
@@ -135,7 +141,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       </div>
                     </div>
 
-                    {/* Menu links */}
                     {profileMenuItems.map((item) => (
                       <button
                         key={item.path}

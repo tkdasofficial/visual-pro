@@ -76,9 +76,12 @@ export default function PlansPage() {
                 <button disabled className="w-full rounded-lg border border-border py-2 text-xs font-medium text-muted-foreground">
                   Current Plan
                 </button>
-              ) : (
-                <button className="w-full rounded-lg bg-primary py-2 text-xs font-medium text-primary-foreground hover:opacity-90">
-                  Upgrade to {plan.name}
+              ) : plan.key === "free" ? null : (
+                <button
+                  onClick={() => navigate(`/checkout?plan=${plan.key}`)}
+                  className="w-full rounded-lg bg-primary py-2 text-xs font-medium text-primary-foreground hover:opacity-90"
+                >
+                  Get {plan.name}
                 </button>
               )}
             </div>
@@ -91,8 +94,11 @@ export default function PlansPage() {
         <Crown className="mx-auto h-8 w-8 text-accent" />
         <h3 className="text-base font-semibold text-foreground">Enterprise</h3>
         <p className="text-sm text-muted-foreground">Custom credits, storage duration, and dedicated support for your team</p>
-        <button className="rounded-lg bg-accent px-6 py-2.5 text-sm font-medium text-accent-foreground hover:opacity-90">
-          Contact Us
+        <button
+          onClick={() => navigate("/checkout?plan=enterprise")}
+          className="rounded-lg bg-accent px-6 py-2.5 text-sm font-medium text-accent-foreground hover:opacity-90"
+        >
+          Get Enterprise Plan
         </button>
       </div>
     </div>
