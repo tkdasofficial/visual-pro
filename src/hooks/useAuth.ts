@@ -5,19 +5,20 @@ import type { User } from "@supabase/supabase-js";
 export interface UserProfile {
   user_id: string;
   full_name: string | null;
-  avatar_url: string | null;
-  plan: "free" | "pro" | "business";
-  credits_daily_limit: number;
-  is_suspended: boolean;
-  is_employee: boolean;
-  department: string | null;
-  referral_code: string | null;
+  whatsapp_number: string | null;
+  subscription_plan: "explorer" | "starter" | "pro";
+  subscription_status: "active" | "expired" | "cancelled";
+  subscription_expiry: string | null;
+  generation_limit: number;
+  generation_used: number;
+  billing_cycle_start: string | null;
+  plan: "explorer" | "starter" | "pro"; // alias
 }
 
 export interface UserCredits {
   balance: number;
-  total_earned: number;
-  total_used: number;
+  limit: number;
+  used: number;
 }
 
 export interface UserRole {
@@ -32,14 +33,32 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   const fetchUserData = async (userId: string) => {
-    const [profileRes, creditsRes, rolesRes] = await Promise.all([
-      supabase.from("profiles").select("*").eq("user_id", userId).single(),
-      supabase.from("credits").select("*").eq("user_id", userId).single(),
+    const [profileRes, rolesRes] = await Promise.all([
+      supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
     ]);
 
-    if (profileRes.data) setProfile(profileRes.data as UserProfile);
-    if (creditsRes.data) setCredits(creditsRes.data as UserCredits);
+    if (profileRes.data) {
+      const p = profileRes.data;
+      const prof: UserProfile = {
+        user_id: p.user_id,
+        full_name: p.full_name,
+        whatsapp_number: p.whatsapp_number,
+        subscription_plan: p.subscription_plan,
+        subscription_status: p.subscription_status,
+        subscription_expiry: p.subscription_expiry,
+        generation_limit: p.generation_limit,
+        generation_used: p.generation_used,
+        billing_cycle_start: p.billing_cycle_start,
+        plan: p.subscription_plan,
+      };
+      setProfile(prof);
+      setCredits({
+        balance: p.generation_limit - p.generation_used,
+        limit: p.generation_limit,
+        used: p.generation_used,
+      });
+    }
     if (rolesRes.data) setRoles(rolesRes.data.map((r) => r.role));
   };
 
@@ -69,20 +88,20 @@ export function useAuth() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const isAdmin = roles.some((r) =>
-    ["owner", "ceo", "super_admin", "director", "manager", "support", "analyst", "viewer"].includes(r)
-  );
-
-  const isSeniorAdmin = roles.some((r) =>
-    ["owner", "ceo", "super_admin", "director", "manager"].includes(r)
-  );
-
-  const isOwner = roles.includes("owner");
+  const isAdmin = roles.includes("admin");
+  const isSeniorAdmin = roles.includes("admin");
+  const isOwner = roles.includes("admin");
 
   const refreshCredits = async () => {
     if (!user) return;
-    const { data } = await supabase.from("credits").select("*").eq("user_id", user.id).single();
-    if (data) setCredits(data as UserCredits);
+    const { data } = await supabase.from("profiles").select("generation_limit, generation_used").eq("user_id", user.id).maybeSingle();
+    if (data) {
+      setCredits({
+        balance: data.generation_limit - data.generation_used,
+        limit: data.generation_limit,
+        used: data.generation_used,
+      });
+    }
   };
 
   return {

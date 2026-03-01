@@ -15,10 +15,10 @@ export default function FeedbackPage() {
   const handleSubmit = async () => {
     if (!text.trim() || !user) return;
     setSending(true);
-    await supabase.from("audit_logs").insert({
-      actor_id: user.id,
+    await supabase.from("admin_logs").insert({
+      admin_user_id: user.id,
       action: "user_feedback",
-      details: { message: text.trim() },
+      details: { message: text.trim() } as any,
     });
     toast({ title: "Thank you for your feedback!" });
     setText("");

@@ -10,7 +10,7 @@ export default function ReferralPage() {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
 
-  const referralLink = `${window.location.origin}/invite/${profile?.referral_code || ""}`;
+  const referralLink = `${window.location.origin}/invite/${profile?.user_id?.slice(0, 8) || ""}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(referralLink);

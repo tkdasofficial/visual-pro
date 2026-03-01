@@ -123,7 +123,7 @@ export default function CharacterPage() {
   const [genPrompt, setGenPrompt] = useState("");
   const [genNegPrompt, setGenNegPrompt] = useState("");
 
-  const maxChars = profile?.plan === "free" ? 5 : Infinity;
+  const maxChars = profile?.plan === "explorer" ? 5 : Infinity;
 
   const loadCharacters = async () => {
     if (!user) return;
@@ -255,27 +255,34 @@ export default function CharacterPage() {
     setGeneratingFace(false);
   };
 
+  // Generation aspect ratio for character
+  const [genRatio, setGenRatio] = useState("1:1");
+  const charAspectRatios = ["1:1", "16:9", "9:16", "4:5"];
+
   const handleGenerateWithCharacter = async () => {
     if (!selectedChar || !genPrompt.trim()) return;
     const charDNA = [
+      `IMPORTANT: This image must feature the EXACT SAME person shown in the reference image. Match their face precisely - same facial structure, eyes, nose, mouth, skin tone, and all distinguishing features.`,
       `Character: ${selectedChar.name}`,
       selectedChar.gender && `Gender: ${selectedChar.gender}`,
       selectedChar.age_range && `Age: ${selectedChar.age_range}`,
       selectedChar.ethnicity && `Ethnicity: ${selectedChar.ethnicity}`,
       selectedChar.hair_style && `Hair: ${selectedChar.hair_style} ${selectedChar.hair_color}`,
-      selectedChar.skin_tone && `Skin: ${selectedChar.skin_tone}`,
+      selectedChar.skin_tone && `Skin tone: ${selectedChar.skin_tone}`,
       selectedChar.body_type && `Build: ${selectedChar.body_type}`,
-      selectedChar.distinct_features && `Features: ${selectedChar.distinct_features}`,
+      selectedChar.distinct_features && `Distinct features: ${selectedChar.distinct_features}`,
       selectedChar.default_expression && `Expression: ${selectedChar.default_expression}`,
-      selectedChar.fashion_style && `Style: ${selectedChar.fashion_style}`,
+      selectedChar.fashion_style && `Fashion style: ${selectedChar.fashion_style}`,
+      selectedChar.personality && `Personality vibe: ${selectedChar.personality}`,
     ].filter(Boolean).join(". ");
 
     await generate({
-      prompt: `${charDNA}. ${genPrompt}`,
-      negativePrompt: genNegPrompt,
+      prompt: `${charDNA}. Scene: ${genPrompt}. The character's face must be identical to the reference photo.`,
+      negativePrompt: `${genNegPrompt} different person, wrong face, inconsistent features, face mismatch`,
       page: "character",
       style: selectedChar.style_preset,
-      aspectRatio: "1:1",
+      aspectRatio: genRatio,
+      imageUrl: selectedChar.face_image_url || undefined,
     });
   };
 
@@ -610,6 +617,18 @@ export default function CharacterPage() {
                 className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent focus:ring-1 focus:ring-accent"
                 placeholder="What to avoid..."
               />
+            </div>
+
+            {/* Aspect Ratio */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-foreground">Aspect Ratio</label>
+              <div className="flex gap-1.5">
+                {charAspectRatios.map((r) => (
+                  <button key={r} onClick={() => setGenRatio(r)}
+                    className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${genRatio === r ? "bg-accent text-accent-foreground" : "border border-border bg-secondary text-secondary-foreground hover:bg-muted"}`}
+                  >{r}</button>
+                ))}
+              </div>
             </div>
 
             <button

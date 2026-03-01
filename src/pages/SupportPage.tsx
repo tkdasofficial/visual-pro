@@ -5,7 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
 interface ChatMsg {
-  id?: string;
   role: "user" | "assistant";
   content: string;
 }
@@ -13,34 +12,15 @@ interface ChatMsg {
 export default function SupportPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [messages, setMessages] = useState<ChatMsg[]>([
+    {
+      role: "assistant",
+      content: "Hello! I'm your Visual Pro support assistant. How can I help you today? I can help with:\n\n• Account & billing questions\n• Image generation tips\n• Feature guidance\n• Technical issues\n• Plan recommendations",
+    },
+  ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-
-  // Load chat history
-  useEffect(() => {
-    if (!user || historyLoaded) return;
-    (async () => {
-      const { data } = await supabase
-        .from("support_messages")
-        .select("id, role, content")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: true })
-        .limit(100);
-      if (data && data.length > 0) {
-        setMessages(data.map((m) => ({ id: m.id, role: m.role as "user" | "assistant", content: m.content })));
-      } else {
-        // Welcome message
-        setMessages([{
-          role: "assistant",
-          content: "Hello! I'm your Visual Pro support assistant. How can I help you today? I can help with:\n\n• Account & billing questions\n• Image generation tips\n• Feature guidance\n• Technical issues\n• Plan recommendations",
-        }]);
-      }
-      setHistoryLoaded(true);
-    })();
-  }, [user, historyLoaded]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -52,9 +32,6 @@ export default function SupportPage() {
     setInput("");
     setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
     setLoading(true);
-
-    // Save user message to DB
-    await supabase.from("support_messages").insert({ user_id: user.id, role: "user", content: userMsg });
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -76,10 +53,7 @@ export default function SupportPage() {
 
       const data = await res.json();
       const reply = data.reply || "I'm sorry, I couldn't process your request. Please try again.";
-
       setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
-      // Save assistant message to DB
-      await supabase.from("support_messages").insert({ user_id: user.id, role: "assistant", content: reply });
     } catch {
       setMessages((prev) => [...prev, { role: "assistant", content: "Sorry, I'm having trouble connecting. Please try again in a moment." }]);
     } finally {
@@ -116,13 +90,7 @@ export default function SupportPage() {
                 <Bot className="h-3.5 w-3.5" />
               </div>
             )}
-            <div
-              className={`max-w-[80%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${
-                msg.role === "user"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-foreground"
-              }`}
-            >
+            <div className={`max-w-[80%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
               <p className="whitespace-pre-wrap">{msg.content}</p>
             </div>
             {msg.role === "user" && (
