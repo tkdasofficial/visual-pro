@@ -74,6 +74,48 @@ export type Database = {
         }
         Relationships: []
       }
+      generation_logs: {
+        Row: {
+          created_at: string
+          credits_used: number
+          expires_at: string | null
+          id: string
+          image_url: string | null
+          metadata: Json | null
+          model: string | null
+          page: string
+          prompt: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits_used?: number
+          expires_at?: string | null
+          id?: string
+          image_url?: string | null
+          metadata?: Json | null
+          model?: string | null
+          page?: string
+          prompt: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credits_used?: number
+          expires_at?: string | null
+          id?: string
+          image_url?: string | null
+          metadata?: Json | null
+          model?: string | null
+          page?: string
+          prompt?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       payment_requests: {
         Row: {
           admin_notes: string | null

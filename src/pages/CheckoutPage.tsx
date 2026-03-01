@@ -34,22 +34,25 @@ export default function CheckoutPage() {
   const [fullName, setFullName] = useState(profile?.full_name || "");
   const [email, setEmail] = useState(user?.email || "");
   const [phone, setPhone] = useState("");
-  const [message, setMessage] = useState("");
+  const [transactionId, setTransactionId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !fullName.trim() || !email.trim()) return;
+    if (!user || !fullName.trim() || !email.trim() || !transactionId.trim()) return;
     setSubmitting(true);
 
-    const { error } = await supabase.from("subscription_requests").insert({
+    const selectedPlan = planKey === "pro" ? "pro" : planKey === "business" ? "starter" : "explorer";
+
+    const { error } = await supabase.from("payment_requests").insert({
       user_id: user.id,
-      plan: planKey,
+      selected_plan: selectedPlan as any,
       full_name: fullName.trim(),
       email: email.trim(),
-      phone: phone.trim() || null,
-      message: message.trim() || null,
+      whatsapp_number: phone.trim() || "N/A",
+      transaction_id: transactionId.trim(),
+      payment_method: "upi" as any,
     });
 
     if (error) {
@@ -69,10 +72,7 @@ export default function CheckoutPage() {
         <p className="text-sm text-muted-foreground">
           Your {plan.name} subscription request has been submitted. Our admin team will review it and get back to you shortly.
         </p>
-        <button
-          onClick={() => navigate("/create")}
-          className="rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
-        >
+        <button onClick={() => navigate("/create")} className="rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90">
           Back to Create
         </button>
       </div>
@@ -90,7 +90,6 @@ export default function CheckoutPage() {
         <p className="text-sm text-muted-foreground">Complete your details to upgrade</p>
       </div>
 
-      {/* Plan summary */}
       <div className="rounded-lg border border-accent/30 bg-accent/5 p-4 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-foreground">{plan.name}</span>
@@ -108,64 +107,30 @@ export default function CheckoutPage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="mb-1.5 block text-sm font-medium text-foreground">Full Name *</label>
-          <input
-            required
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-            placeholder="Your full name"
-          />
+          <input required value={fullName} onChange={(e) => setFullName(e.target.value)}
+            className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-accent focus:ring-1 focus:ring-accent" placeholder="Your full name" />
         </div>
-
         <div>
           <label className="mb-1.5 block text-sm font-medium text-foreground">Email *</label>
-          <input
-            required
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-            placeholder="you@example.com"
-          />
+          <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+            className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-accent focus:ring-1 focus:ring-accent" placeholder="you@example.com" />
         </div>
-
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground">Phone (Optional)</label>
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-            placeholder="+1 (555) 000-0000"
-          />
+          <label className="mb-1.5 block text-sm font-medium text-foreground">WhatsApp Number</label>
+          <input value={phone} onChange={(e) => setPhone(e.target.value)}
+            className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-accent focus:ring-1 focus:ring-accent" placeholder="+1 (555) 000-0000" />
         </div>
-
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground">Message (Optional)</label>
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            rows={3}
-            className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-            placeholder="Any additional requirements or notes..."
-          />
+          <label className="mb-1.5 block text-sm font-medium text-foreground">Transaction ID *</label>
+          <input required value={transactionId} onChange={(e) => setTransactionId(e.target.value)}
+            className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-accent focus:ring-1 focus:ring-accent" placeholder="Your payment transaction ID" />
         </div>
-
-        <button
-          type="submit"
-          disabled={submitting || !fullName.trim() || !email.trim()}
-          className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40"
-        >
-          {submitting ? (
-            <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
-          ) : (
-            <CreditCard className="h-3.5 w-3.5" />
-          )}
+        <button type="submit" disabled={submitting || !fullName.trim() || !email.trim() || !transactionId.trim()}
+          className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40">
+          {submitting ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" /> : <CreditCard className="h-3.5 w-3.5" />}
           {submitting ? "Submitting..." : "Submit Subscription Request"}
         </button>
-
-        <p className="text-center text-[10px] text-muted-foreground">
-          Our admin team will review your request and process payment manually. You'll receive a notification once approved.
-        </p>
+        <p className="text-center text-[10px] text-muted-foreground">Our admin team will review your request and process payment manually.</p>
       </form>
     </div>
   );

@@ -134,19 +134,20 @@ serve(async (req) => {
     }
 
     // Credits & profile check
-    const [{ data: credits }, { data: profile }] = await Promise.all([
-      supabase.from("credits").select("balance").eq("user_id", user.id).single(),
-      supabase.from("profiles").select("is_suspended, plan").eq("user_id", user.id).single(),
-    ]);
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("subscription_plan, subscription_status, generation_limit, generation_used")
+      .eq("user_id", user.id)
+      .single();
 
-    if (!credits || credits.balance < 1) {
+    if (!profile || profile.generation_used >= profile.generation_limit) {
       return new Response(JSON.stringify({ error: "Insufficient credits. Please upgrade your plan." }), {
         status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    if (profile?.is_suspended) {
-      return new Response(JSON.stringify({ error: "Account suspended. Contact support." }), {
+    if (profile.subscription_status !== "active") {
+      return new Response(JSON.stringify({ error: "Subscription expired. Please renew." }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -162,14 +163,26 @@ serve(async (req) => {
 
     // Generate unique seed
     const seed = generateSeed();
-    const expiryInterval = getExpiryInterval(profile?.plan || "free");
+    const expiryInterval = getExpiryInterval(profile?.subscription_plan || "explorer");
 
-    // Build enhanced prompt
+    // Build enhanced prompt with explicit aspect ratio dimensions
+    const aspectRatioMap: Record<string, string> = {
+      "1:1": "square format (1024x1024)",
+      "16:9": "wide landscape format (1792x1024), 16:9 widescreen",
+      "9:16": "tall portrait format (1024x1792), 9:16 vertical",
+      "4:5": "portrait format (1024x1280), 4:5 ratio",
+      "4:3": "landscape format (1280x960), 4:3 ratio",
+      "3:4": "portrait format (960x1280), 3:4 ratio",
+    };
+    const aspectInstruction = aspectRatio && aspectRatioMap[aspectRatio]
+      ? `Image dimensions: ${aspectRatioMap[aspectRatio]}.`
+      : aspectRatio ? `Aspect ratio: ${aspectRatio}.` : "";
+
     const enhancedPrompt = [
       style ? `Style: ${style}.` : "",
       prompt,
       negativePrompt ? `Avoid: ${negativePrompt}.` : "",
-      aspectRatio ? `Aspect ratio: ${aspectRatio}.` : "",
+      aspectInstruction,
       "Ultra high resolution, professional quality.",
     ].filter(Boolean).join(" ");
 
@@ -227,8 +240,10 @@ serve(async (req) => {
     }
 
     // Deduct credit & update log
+    const newUsed = profile.generation_used + 1;
+    const remaining = profile.generation_limit - newUsed;
     await Promise.all([
-      supabase.from("credits").update({ balance: credits.balance - 1 }).eq("user_id", user.id),
+      supabase.from("profiles").update({ generation_used: newUsed }).eq("user_id", user.id),
       logEntry
         ? supabase.from("generation_logs").update({ status: "completed", image_url: publicUrl }).eq("id", logEntry.id)
         : Promise.resolve(),
@@ -239,7 +254,7 @@ serve(async (req) => {
         imageUrl: publicUrl,
         fileName: `visual-pro-${seed}.png`,
         seed,
-        creditsRemaining: credits.balance - 1,
+        creditsRemaining: remaining,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
