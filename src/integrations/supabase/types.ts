@@ -14,458 +14,186 @@ export type Database = {
   }
   public: {
     Tables: {
-      audit_logs: {
+      admin_logs: {
         Row: {
           action: string
-          actor_id: string | null
+          admin_user_id: string
           created_at: string
           details: Json | null
           id: string
-          ip_address: string | null
-          target_id: string | null
+          target_user_id: string | null
         }
         Insert: {
           action: string
-          actor_id?: string | null
+          admin_user_id: string
           created_at?: string
           details?: Json | null
           id?: string
-          ip_address?: string | null
-          target_id?: string | null
+          target_user_id?: string | null
         }
         Update: {
           action?: string
-          actor_id?: string | null
+          admin_user_id?: string
           created_at?: string
           details?: Json | null
           id?: string
-          ip_address?: string | null
-          target_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "audit_logs_actor_id_fkey"
-            columns: ["actor_id"]
-            isOneToOne: false
-            referencedRelation: "users_public"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "audit_logs_target_id_fkey"
-            columns: ["target_id"]
-            isOneToOne: false
-            referencedRelation: "users_public"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      credits: {
-        Row: {
-          balance: number
-          id: string
-          last_reset_at: string
-          total_earned: number
-          total_used: number
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          balance?: number
-          id?: string
-          last_reset_at?: string
-          total_earned?: number
-          total_used?: number
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          balance?: number
-          id?: string
-          last_reset_at?: string
-          total_earned?: number
-          total_used?: number
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "credits_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: true
-            referencedRelation: "users_public"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      generation_logs: {
-        Row: {
-          created_at: string
-          credits_used: number
-          expires_at: string
-          id: string
-          image_url: string | null
-          metadata: Json | null
-          model: string
-          page: string
-          prompt: string
-          status: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          credits_used?: number
-          expires_at?: string
-          id?: string
-          image_url?: string | null
-          metadata?: Json | null
-          model?: string
-          page: string
-          prompt: string
-          status?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          credits_used?: number
-          expires_at?: string
-          id?: string
-          image_url?: string | null
-          metadata?: Json | null
-          model?: string
-          page?: string
-          prompt?: string
-          status?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "generation_logs_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users_public"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      items: {
-        Row: {
-          created_at: string | null
-          data: Json | null
-          id: string
-          name: string
-          owner_id: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          data?: Json | null
-          id?: string
-          name: string
-          owner_id?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          data?: Json | null
-          id?: string
-          name?: string
-          owner_id?: string | null
-          updated_at?: string | null
+          target_user_id?: string | null
         }
         Relationships: []
       }
-      notifications: {
+      generated_images: {
         Row: {
+          auto_delete_at: string
           created_at: string
-          expires_at: string
           id: string
-          is_read: boolean
-          message: string
-          metadata: Json | null
-          title: string
-          type: string
+          image_url: string
+          prompt: string
+          resolution: string | null
+          settings: Json | null
           user_id: string
         }
         Insert: {
+          auto_delete_at?: string
           created_at?: string
-          expires_at?: string
           id?: string
-          is_read?: boolean
-          message: string
-          metadata?: Json | null
-          title: string
-          type?: string
+          image_url: string
+          prompt: string
+          resolution?: string | null
+          settings?: Json | null
           user_id: string
         }
         Update: {
+          auto_delete_at?: string
           created_at?: string
-          expires_at?: string
           id?: string
-          is_read?: boolean
-          message?: string
-          metadata?: Json | null
-          title?: string
-          type?: string
+          image_url?: string
+          prompt?: string
+          resolution?: string | null
+          settings?: Json | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      payment_requests: {
+        Row: {
+          admin_notes: string | null
+          email: string
+          full_name: string
+          id: string
+          payment_method: Database["public"]["Enums"]["payment_method_type"]
+          processed_at: string | null
+          requested_at: string
+          screenshot_url: string | null
+          selected_plan: Database["public"]["Enums"]["subscription_plan"]
+          status: Database["public"]["Enums"]["payment_request_status"]
+          transaction_id: string
+          user_id: string
+          whatsapp_number: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          email: string
+          full_name: string
+          id?: string
+          payment_method: Database["public"]["Enums"]["payment_method_type"]
+          processed_at?: string | null
+          requested_at?: string
+          screenshot_url?: string | null
+          selected_plan: Database["public"]["Enums"]["subscription_plan"]
+          status?: Database["public"]["Enums"]["payment_request_status"]
+          transaction_id: string
+          user_id: string
+          whatsapp_number: string
+        }
+        Update: {
+          admin_notes?: string | null
+          email?: string
+          full_name?: string
+          id?: string
+          payment_method?: Database["public"]["Enums"]["payment_method_type"]
+          processed_at?: string | null
+          requested_at?: string
+          screenshot_url?: string | null
+          selected_plan?: Database["public"]["Enums"]["subscription_plan"]
+          status?: Database["public"]["Enums"]["payment_request_status"]
+          transaction_id?: string
+          user_id?: string
+          whatsapp_number?: string
         }
         Relationships: []
       }
       profiles: {
         Row: {
-          avatar_url: string | null
+          billing_cycle_start: string | null
           created_at: string
-          credits_daily_limit: number
-          department: string | null
           full_name: string | null
+          generation_limit: number
+          generation_used: number
           id: string
-          is_employee: boolean
-          is_suspended: boolean
-          plan: Database["public"]["Enums"]["subscription_plan"]
-          referral_code: string | null
-          referred_by: string | null
+          subscription_expiry: string | null
+          subscription_plan: Database["public"]["Enums"]["subscription_plan"]
+          subscription_status: Database["public"]["Enums"]["subscription_status"]
           updated_at: string
           user_id: string
+          whatsapp_number: string | null
         }
         Insert: {
-          avatar_url?: string | null
+          billing_cycle_start?: string | null
           created_at?: string
-          credits_daily_limit?: number
-          department?: string | null
           full_name?: string | null
+          generation_limit?: number
+          generation_used?: number
           id?: string
-          is_employee?: boolean
-          is_suspended?: boolean
-          plan?: Database["public"]["Enums"]["subscription_plan"]
-          referral_code?: string | null
-          referred_by?: string | null
+          subscription_expiry?: string | null
+          subscription_plan?: Database["public"]["Enums"]["subscription_plan"]
+          subscription_status?: Database["public"]["Enums"]["subscription_status"]
           updated_at?: string
           user_id: string
+          whatsapp_number?: string | null
         }
         Update: {
-          avatar_url?: string | null
+          billing_cycle_start?: string | null
           created_at?: string
-          credits_daily_limit?: number
-          department?: string | null
           full_name?: string | null
+          generation_limit?: number
+          generation_used?: number
           id?: string
-          is_employee?: boolean
-          is_suspended?: boolean
-          plan?: Database["public"]["Enums"]["subscription_plan"]
-          referral_code?: string | null
-          referred_by?: string | null
+          subscription_expiry?: string | null
+          subscription_plan?: Database["public"]["Enums"]["subscription_plan"]
+          subscription_status?: Database["public"]["Enums"]["subscription_status"]
           updated_at?: string
           user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "profiles_referred_by_fkey"
-            columns: ["referred_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "profiles_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: true
-            referencedRelation: "users_public"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      referrals: {
-        Row: {
-          created_at: string
-          credits_awarded: number
-          id: string
-          referred_id: string
-          referrer_id: string
-        }
-        Insert: {
-          created_at?: string
-          credits_awarded?: number
-          id?: string
-          referred_id: string
-          referrer_id: string
-        }
-        Update: {
-          created_at?: string
-          credits_awarded?: number
-          id?: string
-          referred_id?: string
-          referrer_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "referrals_referred_id_fkey"
-            columns: ["referred_id"]
-            isOneToOne: true
-            referencedRelation: "users_public"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "referrals_referrer_id_fkey"
-            columns: ["referrer_id"]
-            isOneToOne: false
-            referencedRelation: "users_public"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      subscription_requests: {
-        Row: {
-          admin_notes: string | null
-          created_at: string
-          email: string | null
-          full_name: string | null
-          id: string
-          message: string | null
-          phone: string | null
-          plan: string
-          reviewed_by: string | null
-          status: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          admin_notes?: string | null
-          created_at?: string
-          email?: string | null
-          full_name?: string | null
-          id?: string
-          message?: string | null
-          phone?: string | null
-          plan: string
-          reviewed_by?: string | null
-          status?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          admin_notes?: string | null
-          created_at?: string
-          email?: string | null
-          full_name?: string | null
-          id?: string
-          message?: string | null
-          phone?: string | null
-          plan?: string
-          reviewed_by?: string | null
-          status?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      support_messages: {
-        Row: {
-          content: string
-          created_at: string
-          id: string
-          metadata: Json | null
-          role: string
-          user_id: string
-        }
-        Insert: {
-          content: string
-          created_at?: string
-          id?: string
-          metadata?: Json | null
-          role?: string
-          user_id: string
-        }
-        Update: {
-          content?: string
-          created_at?: string
-          id?: string
-          metadata?: Json | null
-          role?: string
-          user_id?: string
+          whatsapp_number?: string | null
         }
         Relationships: []
       }
       user_roles: {
         Row: {
-          assigned_by: string | null
-          created_at: string
           id: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
-          assigned_by?: string | null
-          created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
-          assigned_by?: string | null
-          created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_roles_assigned_by_fkey"
-            columns: ["assigned_by"]
-            isOneToOne: false
-            referencedRelation: "users_public"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_roles_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users_public"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      users_public_mirror: {
-        Row: {
-          avatar_url: string | null
-          created_at: string | null
-          email: string | null
-          full_name: string | null
-          id: string
-          raw_user_meta_data: Json | null
-        }
-        Insert: {
-          avatar_url?: string | null
-          created_at?: string | null
-          email?: string | null
-          full_name?: string | null
-          id: string
-          raw_user_meta_data?: Json | null
-        }
-        Update: {
-          avatar_url?: string | null
-          created_at?: string | null
-          email?: string | null
-          full_name?: string | null
-          id?: string
-          raw_user_meta_data?: Json | null
         }
         Relationships: []
       }
     }
     Views: {
-      users_public: {
-        Row: {
-          avatar_url: string | null
-          created_at: string | null
-          email: string | null
-          full_name: string | null
-          id: string | null
-          raw_user_meta_data: Json | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
-      get_user_priority: { Args: { _user_id: string }; Returns: number }
+      get_own_profile_plan: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["subscription_plan"]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -473,20 +201,13 @@ export type Database = {
         }
         Returns: boolean
       }
-      is_owner: { Args: never; Returns: boolean }
     }
     Enums: {
-      app_role:
-        | "owner"
-        | "ceo"
-        | "super_admin"
-        | "director"
-        | "manager"
-        | "support"
-        | "analyst"
-        | "viewer"
-        | "user"
-      subscription_plan: "free" | "pro" | "business"
+      app_role: "admin" | "user"
+      payment_method_type: "upi" | "bank_transfer"
+      payment_request_status: "pending" | "approved" | "rejected"
+      subscription_plan: "explorer" | "starter" | "pro"
+      subscription_status: "active" | "expired" | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -614,18 +335,11 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: [
-        "owner",
-        "ceo",
-        "super_admin",
-        "director",
-        "manager",
-        "support",
-        "analyst",
-        "viewer",
-        "user",
-      ],
-      subscription_plan: ["free", "pro", "business"],
+      app_role: ["admin", "user"],
+      payment_method_type: ["upi", "bank_transfer"],
+      payment_request_status: ["pending", "approved", "rejected"],
+      subscription_plan: ["explorer", "starter", "pro"],
+      subscription_status: ["active", "expired", "cancelled"],
     },
   },
 } as const
