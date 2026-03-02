@@ -2,10 +2,6 @@ import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
-/**
- * AdminRoute: Only allows users with admin roles (owner, ceo, super_admin, director, manager, support, analyst).
- * Redirects regular users to /create. Redirects unauthenticated users to /login.
- */
 export default function AdminRoute({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
@@ -21,14 +17,12 @@ export default function AdminRoute({ children }: { children: React.ReactNode }) 
       }
       setAuthenticated(true);
 
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", session.user.id);
-
-      const adminRoles = ["owner", "ceo", "super_admin", "director", "manager", "support", "analyst"];
-      const hasAdmin = roles?.some((r) => adminRoles.includes(r.role)) ?? false;
-      setIsAdmin(hasAdmin);
+      // Use the has_role DB function for secure check
+      const { data } = await supabase.rpc("has_role", {
+        _user_id: session.user.id,
+        _role: "admin",
+      });
+      setIsAdmin(!!data);
       setLoading(false);
     };
     check();
