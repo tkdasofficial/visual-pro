@@ -261,8 +261,36 @@ export default function CharacterPage() {
 
   const handleGenerateWithCharacter = async () => {
     if (!selectedChar || !genPrompt.trim()) return;
+
+    // If no face image, we can't do image-to-image face matching
+    if (!selectedChar.face_image_url) {
+      // Fall back to text-only with detailed character description
+      const charDNA = [
+        `Character: ${selectedChar.name}`,
+        selectedChar.gender && `Gender: ${selectedChar.gender}`,
+        selectedChar.age_range && `Age: ${selectedChar.age_range}`,
+        selectedChar.ethnicity && `Ethnicity: ${selectedChar.ethnicity}`,
+        selectedChar.hair_style && `Hair: ${selectedChar.hair_style} ${selectedChar.hair_color}`,
+        selectedChar.skin_tone && `Skin tone: ${selectedChar.skin_tone}`,
+        selectedChar.body_type && `Build: ${selectedChar.body_type}`,
+        selectedChar.distinct_features && `Distinct features: ${selectedChar.distinct_features}`,
+        selectedChar.default_expression && `Expression: ${selectedChar.default_expression}`,
+        selectedChar.fashion_style && `Fashion style: ${selectedChar.fashion_style}`,
+      ].filter(Boolean).join(". ");
+
+      await generate({
+        prompt: `${charDNA}. Scene: ${genPrompt}`,
+        negativePrompt: genNegPrompt,
+        page: "character",
+        style: selectedChar.style_preset,
+        aspectRatio: genRatio,
+      });
+      return;
+    }
+
+    // Image-to-image with face reference → uses Lovable AI
     const charDNA = [
-      `IMPORTANT: This image must feature the EXACT SAME person shown in the reference image. Match their face precisely - same facial structure, eyes, nose, mouth, skin tone, and all distinguishing features.`,
+      `CRITICAL: Generate a new image of the EXACT SAME person shown in the reference photo. The face, facial structure, eyes, nose, mouth, jawline, skin tone, and all facial features must be IDENTICAL to the reference image. This is the same person in a new scene.`,
       `Character: ${selectedChar.name}`,
       selectedChar.gender && `Gender: ${selectedChar.gender}`,
       selectedChar.age_range && `Age: ${selectedChar.age_range}`,
@@ -277,12 +305,12 @@ export default function CharacterPage() {
     ].filter(Boolean).join(". ");
 
     await generate({
-      prompt: `${charDNA}. Scene: ${genPrompt}. The character's face must be identical to the reference photo.`,
-      negativePrompt: `${genNegPrompt} different person, wrong face, inconsistent features, face mismatch`,
+      prompt: `${charDNA}. Scene: ${genPrompt}. Keep the person's face exactly matching the reference photo.`,
+      negativePrompt: `${genNegPrompt} different person, wrong face, inconsistent features, face mismatch, changed identity`,
       page: "character",
       style: selectedChar.style_preset,
       aspectRatio: genRatio,
-      imageUrl: selectedChar.face_image_url || undefined,
+      imageUrl: selectedChar.face_image_url,
     });
   };
 
