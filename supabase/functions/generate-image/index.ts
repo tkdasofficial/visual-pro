@@ -7,67 +7,119 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// ── Gemini fallback key cycling ──
-function getGeminiKeys(): string[] {
-  return [
-    Deno.env.get("GEMINI_API_KEY_1"),
-    Deno.env.get("GEMINI_API_KEY_2"),
-    Deno.env.get("GEMINI_API_KEY_3"),
-    Deno.env.get("GEMINI_API_KEY_4"),
-    Deno.env.get("GEMINI_API_KEY_5"),
-    Deno.env.get("GEMINI_API_KEY_6"),
-    Deno.env.get("GEMINI_API_KEY_7"),
-    Deno.env.get("GEMINI_API_KEY_8"),
-  ].filter(Boolean) as string[];
-}
+// ── Aspect ratio maps ──
+const freepikAspectMap: Record<string, string> = {
+  "1:1": "square_1_1",
+  "16:9": "widescreen_16_9",
+  "9:16": "social_story_9_16",
+  "4:5": "social_post_4_5",
+  "4:3": "classic_4_3",
+  "3:4": "traditional_3_4",
+};
 
-async function generateViaGemini(prompt: string, geminiKeys: string[]): Promise<string | null> {
-  const keys = [...geminiKeys].sort(() => Math.random() - 0.5);
-  for (const key of keys) {
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${key}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
-          }),
-        }
-      );
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error(`Key attempt failed (${res.status}): ${errText.slice(0, 200)}`);
-        continue;
+const lovableAspectInstruction: Record<string, string> = {
+  "1:1": "square format (1024x1024)",
+  "16:9": "wide landscape format (1792x1024), 16:9 widescreen",
+  "9:16": "tall portrait format (1024x1792), 9:16 vertical",
+  "4:5": "portrait format (1024x1280), 4:5 ratio",
+  "4:3": "landscape format (1280x960), 4:3 ratio",
+  "3:4": "portrait format (960x1280), 3:4 ratio",
+};
+
+// ── Freepik text-to-image (async polling) ──
+async function generateViaFreepik(
+  apiKey: string,
+  prompt: string,
+  aspectRatio?: string
+): Promise<string | null> {
+  const freepikAspect = aspectRatio ? freepikAspectMap[aspectRatio] || "square_1_1" : "square_1_1";
+
+  // 1. Create task
+  const createRes = await fetch("https://api.freepik.com/v1/ai/text-to-image/flux-dev", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-freepik-api-key": apiKey,
+    },
+    body: JSON.stringify({
+      prompt,
+      aspect_ratio: freepikAspect,
+    }),
+  });
+
+  if (!createRes.ok) {
+    const errText = await createRes.text();
+    console.error("Freepik create error:", createRes.status, errText.slice(0, 300));
+    return null;
+  }
+
+  const createData = await createRes.json();
+  const taskId = createData?.data?.task_id;
+  if (!taskId) {
+    console.error("Freepik: no task_id returned");
+    return null;
+  }
+
+  // 2. Poll for completion (max 60s)
+  const maxAttempts = 30;
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
+
+    const statusRes = await fetch(
+      `https://api.freepik.com/v1/ai/text-to-image/flux-dev/${taskId}`,
+      {
+        headers: { "x-freepik-api-key": apiKey },
       }
-      const data = await res.json();
-      const part = data?.candidates?.[0]?.content?.parts?.find(
-        (p: any) => p.inlineData?.mimeType?.startsWith("image/")
-      );
-      if (part?.inlineData?.data) {
-        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-      }
-    } catch (err) {
-      console.error("Key error:", err);
+    );
+
+    if (!statusRes.ok) {
+      console.error("Freepik poll error:", statusRes.status);
       continue;
     }
+
+    const statusData = await statusRes.json();
+    const status = statusData?.data?.status;
+
+    if (status === "COMPLETED") {
+      // Extract image - Freepik returns images array with base64 or URLs
+      const images = statusData?.data?.generated;
+      if (images && images.length > 0) {
+        // Could be base64 or URL
+        const img = images[0];
+        if (img.base64) {
+          return `data:image/png;base64,${img.base64}`;
+        }
+        if (img.url) {
+          return img.url;
+        }
+      }
+      console.error("Freepik: completed but no image data");
+      return null;
+    }
+
+    if (status === "FAILED" || status === "ERROR") {
+      console.error("Freepik task failed:", JSON.stringify(statusData?.data));
+      return null;
+    }
+    // else CREATED/IN_PROGRESS - keep polling
   }
+
+  console.error("Freepik: polling timeout");
   return null;
 }
 
-async function generateViaLovable(apiKey: string, prompt: string, inputImageUrl?: string): Promise<string | null> {
-  const messages: any[] = [
-    {
-      role: "user",
-      content: inputImageUrl
-        ? [
-            { type: "text", text: prompt },
-            { type: "image_url", image_url: { url: inputImageUrl } },
-          ]
-        : prompt,
-    },
-  ];
+// ── Lovable AI image-to-image (for character face consistency, style transfer) ──
+async function generateViaLovableAI(
+  apiKey: string,
+  prompt: string,
+  inputImageUrl: string,
+  aspectRatio?: string
+): Promise<string | null> {
+  const aspectInstruction = aspectRatio && lovableAspectInstruction[aspectRatio]
+    ? `Image dimensions: ${lovableAspectInstruction[aspectRatio]}.`
+    : "";
+
+  const fullPrompt = [prompt, aspectInstruction].filter(Boolean).join(" ");
 
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -77,14 +129,22 @@ async function generateViaLovable(apiKey: string, prompt: string, inputImageUrl?
     },
     body: JSON.stringify({
       model: "google/gemini-2.5-flash-image",
-      messages,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: fullPrompt },
+            { type: "image_url", image_url: { url: inputImageUrl } },
+          ],
+        },
+      ],
       modalities: ["image", "text"],
     }),
   });
 
   if (!res.ok) {
     const errText = await res.text();
-    console.error("Primary error:", res.status, errText.slice(0, 200));
+    console.error("Lovable AI error:", res.status, errText.slice(0, 300));
     return null;
   }
 
@@ -92,12 +152,39 @@ async function generateViaLovable(apiKey: string, prompt: string, inputImageUrl?
   return data.choices?.[0]?.message?.images?.[0]?.image_url?.url ?? null;
 }
 
-// ── Seed generator (8-digit) ──
+// ── Lovable AI text-to-image fallback (if Freepik fails) ──
+async function generateTextViaLovableAI(
+  apiKey: string,
+  prompt: string
+): Promise<string | null> {
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash-image",
+      messages: [{ role: "user", content: prompt }],
+      modalities: ["image", "text"],
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error("Lovable AI text fallback error:", res.status, errText.slice(0, 300));
+    return null;
+  }
+
+  const data = await res.json();
+  return data.choices?.[0]?.message?.images?.[0]?.image_url?.url ?? null;
+}
+
+// ── Seed & expiry helpers ──
 function generateSeed(): string {
   return String(Math.floor(10000000 + Math.random() * 90000000));
 }
 
-// ── Plan-based expiry ──
 function getExpiryInterval(plan: string): string {
   switch (plan) {
     case "pro": return "3 days";
@@ -113,6 +200,7 @@ serve(async (req) => {
 
   try {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const FREEPIK_API_KEY = Deno.env.get("FREEPIK_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -133,7 +221,7 @@ serve(async (req) => {
       });
     }
 
-    // Credits & profile check
+    // Credits & profile
     const { data: profile } = await supabase
       .from("profiles")
       .select("subscription_plan, subscription_status, generation_limit, generation_used")
@@ -161,28 +249,15 @@ serve(async (req) => {
       });
     }
 
-    // Generate unique seed
     const seed = generateSeed();
-    const expiryInterval = getExpiryInterval(profile?.subscription_plan || "explorer");
+    const expiryInterval = getExpiryInterval(profile.subscription_plan || "explorer");
+    const isImageToImage = !!inputImageUrl;
 
-    // Build enhanced prompt with explicit aspect ratio dimensions
-    const aspectRatioMap: Record<string, string> = {
-      "1:1": "square format (1024x1024)",
-      "16:9": "wide landscape format (1792x1024), 16:9 widescreen",
-      "9:16": "tall portrait format (1024x1792), 9:16 vertical",
-      "4:5": "portrait format (1024x1280), 4:5 ratio",
-      "4:3": "landscape format (1280x960), 4:3 ratio",
-      "3:4": "portrait format (960x1280), 3:4 ratio",
-    };
-    const aspectInstruction = aspectRatio && aspectRatioMap[aspectRatio]
-      ? `Image dimensions: ${aspectRatioMap[aspectRatio]}.`
-      : aspectRatio ? `Aspect ratio: ${aspectRatio}.` : "";
-
+    // Build enhanced prompt
     const enhancedPrompt = [
       style ? `Style: ${style}.` : "",
       prompt,
       negativePrompt ? `Avoid: ${negativePrompt}.` : "",
-      aspectInstruction,
       "Ultra high resolution, professional quality.",
     ].filter(Boolean).join(" ");
 
@@ -193,25 +268,29 @@ serve(async (req) => {
         user_id: user.id,
         page: page || "create",
         prompt,
-        model: "visual-pro-engine",
+        model: isImageToImage ? "lovable-ai" : "freepik-flux-dev",
         status: "pending",
         credits_used: 1,
         expires_at: `now() + interval '${expiryInterval}'`,
-        metadata: { style, aspectRatio, negativePrompt, seed, watermark: "Visual Pro | Avzio" },
+        metadata: { style, aspectRatio, negativePrompt, seed, isImageToImage },
       })
       .select().single();
 
-    // Try primary AI, then fallback
     let generatedImage: string | null = null;
 
-    if (LOVABLE_API_KEY) {
-      generatedImage = await generateViaLovable(LOVABLE_API_KEY, enhancedPrompt, inputImageUrl);
-    }
-
-    if (!generatedImage) {
-      const geminiKeys = getGeminiKeys();
-      if (geminiKeys.length > 0) {
-        generatedImage = await generateViaGemini(enhancedPrompt, geminiKeys);
+    if (isImageToImage) {
+      // ── IMAGE-TO-IMAGE: Lovable AI (character face, style transfer) ──
+      if (LOVABLE_API_KEY) {
+        generatedImage = await generateViaLovableAI(LOVABLE_API_KEY, enhancedPrompt, inputImageUrl, aspectRatio);
+      }
+    } else {
+      // ── TEXT-TO-IMAGE: Freepik first, Lovable AI fallback ──
+      if (FREEPIK_API_KEY) {
+        generatedImage = await generateViaFreepik(FREEPIK_API_KEY, enhancedPrompt, aspectRatio);
+      }
+      // Fallback to Lovable AI if Freepik fails or key missing
+      if (!generatedImage && LOVABLE_API_KEY) {
+        generatedImage = await generateTextViaLovableAI(LOVABLE_API_KEY, enhancedPrompt);
       }
     }
 
@@ -224,24 +303,27 @@ serve(async (req) => {
       });
     }
 
-    // Upload to storage with seed-based naming
-    const base64Data = generatedImage.replace(/^data:image\/\w+;base64,/, "");
-    const imageBuffer = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
-    const fileName = `${user.id}/visual-pro-${seed}.png`;
-
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from("generated-images")
-      .upload(fileName, imageBuffer, { contentType: "image/png", upsert: false });
-
+    // Upload to storage if base64
     let publicUrl = generatedImage;
-    if (!uploadError && uploadData) {
-      const { data: urlData } = supabase.storage.from("generated-images").getPublicUrl(fileName);
-      publicUrl = urlData.publicUrl;
+    if (generatedImage.startsWith("data:")) {
+      const base64Data = generatedImage.replace(/^data:image\/\w+;base64,/, "");
+      const imageBuffer = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+      const fileName = `${user.id}/visual-pro-${seed}.png`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("generated-images")
+        .upload(fileName, imageBuffer, { contentType: "image/png", upsert: false });
+
+      if (!uploadError && uploadData) {
+        const { data: urlData } = supabase.storage.from("generated-images").getPublicUrl(fileName);
+        publicUrl = urlData.publicUrl;
+      }
     }
 
     // Deduct credit & update log
     const newUsed = profile.generation_used + 1;
     const remaining = profile.generation_limit - newUsed;
+
     await Promise.all([
       supabase.from("profiles").update({ generation_used: newUsed }).eq("user_id", user.id),
       logEntry
