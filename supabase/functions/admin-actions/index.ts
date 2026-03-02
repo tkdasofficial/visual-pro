@@ -7,8 +7,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const ADMIN_ROLES = ["owner", "ceo", "super_admin", "director", "manager", "support", "analyst", "viewer"];
-
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -33,232 +31,252 @@ serve(async (req) => {
       });
     }
 
-    // Verify actor has admin role
-    const { data: actorRoles } = await supabase
-      .from("user_roles").select("role").eq("user_id", user.id);
-
-    const actorRoleList = actorRoles?.map((r: any) => r.role) || [];
-    const isAdmin = actorRoleList.some((r: string) => ADMIN_ROLES.includes(r));
-
+    // Verify admin role via has_role function
+    const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
     if (!isAdmin) {
-      return new Response(JSON.stringify({ error: "Forbidden: Insufficient permissions" }), {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const body = await req.json();
-    const { action, targetUserId, data } = body;
+    const { action, targetUserId, data: actionData } = body;
 
-    // Get actor priority
-    const { data: priorityResult } = await supabase.rpc("get_user_priority", { _user_id: user.id });
-    const actorPriority = priorityResult || 1;
-
-    const logAudit = async (actionName: string, details: object) => {
-      await supabase.from("audit_logs").insert({
-        actor_id: user.id,
-        target_id: targetUserId || null,
+    const logAction = async (actionName: string, details: object) => {
+      await supabase.from("admin_logs").insert({
+        admin_user_id: user.id,
+        target_user_id: targetUserId || null,
         action: actionName,
         details,
       });
     };
 
-    switch (action) {
-      case "get_users": {
-        // Fetch profiles separately to avoid broken FK join
-        const { data: profiles, error: profilesErr } = await supabase
-          .from("profiles")
-          .select("user_id, full_name, avatar_url, plan, is_suspended, is_employee, department, referral_code, created_at")
-          .order("created_at", { ascending: false })
-          .limit(data?.limit || 200);
+    const json = (d: any, status = 200) =>
+      new Response(JSON.stringify(d), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-        if (profilesErr) throw profilesErr;
+    switch (action) {
+      // ── GET ALL USERS ──
+      case "get_users": {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("user_id, full_name, whatsapp_number, subscription_plan, subscription_status, subscription_expiry, generation_limit, generation_used, billing_cycle_start, created_at, updated_at")
+          .order("created_at", { ascending: false })
+          .limit(500);
 
         const userIds = profiles?.map((p: any) => p.user_id) || [];
 
-        // Fetch credits and roles separately
-        const [creditsResult, rolesResult] = await Promise.all([
-          supabase.from("credits").select("user_id, balance, total_earned, total_used").in("user_id", userIds),
-          supabase.from("user_roles").select("user_id, role").in("user_id", userIds),
-        ]);
-
-        const creditsMap: Record<string, any> = {};
-        creditsResult.data?.forEach((c: any) => { creditsMap[c.user_id] = c; });
+        const { data: roles } = await supabase
+          .from("user_roles").select("user_id, role").in("user_id", userIds);
 
         const rolesMap: Record<string, string[]> = {};
-        rolesResult.data?.forEach((r: any) => {
+        roles?.forEach((r: any) => {
           if (!rolesMap[r.user_id]) rolesMap[r.user_id] = [];
           rolesMap[r.user_id].push(r.role);
         });
 
+        // Get auth user emails
+        const { data: authData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+        const emailMap: Record<string, string> = {};
+        authData?.users?.forEach((u: any) => { emailMap[u.id] = u.email || ""; });
+
         const enriched = profiles?.map((p: any) => ({
           ...p,
-          credits: creditsMap[p.user_id] || null,
-          user_roles: (rolesMap[p.user_id] || ["user"]).map((r) => ({ role: r })),
+          email: emailMap[p.user_id] || "",
+          roles: rolesMap[p.user_id] || ["user"],
         }));
 
-        return new Response(JSON.stringify({ users: enriched }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return json({ users: enriched });
       }
 
-      case "suspend_user": {
-        if (!targetUserId) throw new Error("targetUserId required");
-        const { data: targetPriority } = await supabase.rpc("get_user_priority", { _user_id: targetUserId });
-        if ((targetPriority || 1) >= actorPriority) {
-          return new Response(JSON.stringify({ error: "Cannot suspend a user with equal or higher priority" }), {
-            status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        await supabase.from("profiles").update({ is_suspended: true }).eq("user_id", targetUserId);
-        await logAudit("suspend_user", { reason: data?.reason || "" });
-        return new Response(JSON.stringify({ success: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      case "unsuspend_user": {
-        if (!targetUserId) throw new Error("targetUserId required");
-        await supabase.from("profiles").update({ is_suspended: false }).eq("user_id", targetUserId);
-        await logAudit("unsuspend_user", {});
-        return new Response(JSON.stringify({ success: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      case "assign_role": {
-        if (!targetUserId || !data?.role) throw new Error("targetUserId and role required");
-        if (data.role === "owner") {
-          return new Response(JSON.stringify({ error: "Owner role cannot be assigned via this panel" }), {
-            status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-
-        // Remove existing non-user roles first
-        await supabase.from("user_roles")
-          .delete()
-          .eq("user_id", targetUserId)
-          .neq("role", "user")
-          .neq("role", "owner");
-
-        // Insert new role
-        await supabase.from("user_roles").insert({
-          user_id: targetUserId,
-          role: data.role,
-          assigned_by: user.id,
-        });
-
-        if (data.role !== "user") {
-          await supabase.from("profiles").update({
-            is_employee: true,
-            department: data.department || null,
-          }).eq("user_id", targetUserId);
-        } else {
-          await supabase.from("profiles").update({ is_employee: false }).eq("user_id", targetUserId);
-        }
-
-        await logAudit("assign_role", { role: data.role });
-        return new Response(JSON.stringify({ success: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      case "update_plan": {
-        if (!targetUserId || !data?.plan) throw new Error("targetUserId and plan required");
-        const planLimits: Record<string, number> = { free: 5, pro: 100, business: 200 };
-        const dailyLimit = planLimits[data.plan] || 5;
-        await supabase.from("profiles").update({
-          plan: data.plan, credits_daily_limit: dailyLimit,
-        }).eq("user_id", targetUserId);
-        await logAudit("update_plan", { plan: data.plan });
-        return new Response(JSON.stringify({ success: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      case "adjust_credits": {
-        if (!targetUserId || data?.amount === undefined) throw new Error("targetUserId and amount required");
-        const { data: currentCredits } = await supabase
-          .from("credits").select("balance, total_earned").eq("user_id", targetUserId).single();
-        const newBalance = Math.max(0, (currentCredits?.balance || 0) + data.amount);
-        const newEarned = data.amount > 0
-          ? (currentCredits?.total_earned || 0) + data.amount
-          : currentCredits?.total_earned || 0;
-        await supabase.from("credits").update({ balance: newBalance, total_earned: newEarned }).eq("user_id", targetUserId);
-        await logAudit("adjust_credits", { amount: data.amount, reason: data.reason || "" });
-        return new Response(JSON.stringify({ success: true, newBalance }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
+      // ── GET DASHBOARD STATS ──
       case "get_stats": {
-        const [usersResult, logsResult, referralsResult, creditsResult] = await Promise.all([
-          supabase.from("profiles").select("plan, is_suspended, is_employee, created_at").limit(500),
-          supabase.from("generation_logs").select("status, credits_used, created_at, page, model").limit(1000),
-          supabase.from("referrals").select("credits_awarded, created_at").limit(500),
-          supabase.from("credits").select("balance, total_used, total_earned").limit(500),
+        const [profilesRes, logsRes, paymentsRes] = await Promise.all([
+          supabase.from("profiles").select("subscription_plan, subscription_status, generation_limit, generation_used").limit(1000),
+          supabase.from("generation_logs").select("status, page, created_at").limit(1000),
+          supabase.from("payment_requests").select("status, selected_plan, requested_at").limit(500),
         ]);
-        return new Response(JSON.stringify({
-          users: usersResult.data || [],
-          logs: logsResult.data || [],
-          referrals: referralsResult.data || [],
-          credits: creditsResult.data || [],
-        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+        const profiles = profilesRes.data || [];
+        const logs = logsRes.data || [];
+        const payments = paymentsRes.data || [];
+
+        const planCounts: Record<string, number> = {};
+        let totalCreditsUsed = 0;
+        let totalCreditsLimit = 0;
+        profiles.forEach((p: any) => {
+          planCounts[p.subscription_plan] = (planCounts[p.subscription_plan] || 0) + 1;
+          totalCreditsUsed += p.generation_used || 0;
+          totalCreditsLimit += p.generation_limit || 0;
+        });
+
+        const statusCounts: Record<string, number> = {};
+        const pageCounts: Record<string, number> = {};
+        logs.forEach((l: any) => {
+          statusCounts[l.status] = (statusCounts[l.status] || 0) + 1;
+          pageCounts[l.page] = (pageCounts[l.page] || 0) + 1;
+        });
+
+        const paymentStatusCounts: Record<string, number> = {};
+        payments.forEach((p: any) => {
+          paymentStatusCounts[p.status] = (paymentStatusCounts[p.status] || 0) + 1;
+        });
+
+        return json({
+          totalUsers: profiles.length,
+          totalGenerations: logs.length,
+          totalCreditsUsed,
+          totalCreditsLimit,
+          planCounts,
+          statusCounts,
+          pageCounts,
+          paymentStatusCounts,
+          pendingPayments: paymentStatusCounts["pending"] || 0,
+        });
       }
 
-      case "add_employee": {
-        if (!data?.email) throw new Error("Email required");
-        const { data: authUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-        const targetUser = authUsers?.users?.find((u: any) => u.email?.toLowerCase() === data.email.toLowerCase());
-        if (!targetUser) {
-          return new Response(JSON.stringify({ error: "User not found. They must sign up first." }), {
-            status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+      // ── GET PAYMENT REQUESTS ──
+      case "get_payments": {
+        const { data: payments } = await supabase
+          .from("payment_requests")
+          .select("*")
+          .order("requested_at", { ascending: false })
+          .limit(200);
+        return json({ payments: payments || [] });
+      }
+
+      // ── APPROVE PAYMENT ──
+      case "approve_payment": {
+        if (!actionData?.paymentId) throw new Error("paymentId required");
+        const { data: payment } = await supabase
+          .from("payment_requests")
+          .select("*")
+          .eq("id", actionData.paymentId)
+          .single();
+
+        if (!payment) return json({ error: "Payment not found" }, 404);
+
+        const planLimits: Record<string, number> = { explorer: 5, starter: 50, pro: 200 };
+        const newLimit = planLimits[payment.selected_plan] || 5;
+
+        await Promise.all([
+          supabase.from("payment_requests").update({
+            status: "approved",
+            admin_notes: actionData.notes || "",
+            processed_at: new Date().toISOString(),
+          }).eq("id", actionData.paymentId),
+          supabase.from("profiles").update({
+            subscription_plan: payment.selected_plan,
+            subscription_status: "active",
+            generation_limit: newLimit,
+            generation_used: 0,
+            billing_cycle_start: new Date().toISOString(),
+            subscription_expiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          }).eq("user_id", payment.user_id),
+        ]);
+
+        await logAction("approve_payment", { paymentId: actionData.paymentId, plan: payment.selected_plan });
+        return json({ success: true });
+      }
+
+      // ── REJECT PAYMENT ──
+      case "reject_payment": {
+        if (!actionData?.paymentId) throw new Error("paymentId required");
+        await supabase.from("payment_requests").update({
+          status: "rejected",
+          admin_notes: actionData.notes || "",
+          processed_at: new Date().toISOString(),
+        }).eq("id", actionData.paymentId);
+
+        await logAction("reject_payment", { paymentId: actionData.paymentId });
+        return json({ success: true });
+      }
+
+      // ── UPDATE USER PROFILE ──
+      case "update_user": {
+        if (!targetUserId) throw new Error("targetUserId required");
+        const updates: any = {};
+        if (actionData?.subscription_plan) updates.subscription_plan = actionData.subscription_plan;
+        if (actionData?.subscription_status) updates.subscription_status = actionData.subscription_status;
+        if (actionData?.generation_limit !== undefined) updates.generation_limit = actionData.generation_limit;
+        if (actionData?.generation_used !== undefined) updates.generation_used = actionData.generation_used;
+
+        if (Object.keys(updates).length > 0) {
+          await supabase.from("profiles").update(updates).eq("user_id", targetUserId);
         }
 
-        // Remove existing non-user/owner roles
-        await supabase.from("user_roles")
-          .delete().eq("user_id", targetUser.id).neq("role", "user").neq("role", "owner");
-
-        await supabase.from("user_roles").insert({
-          user_id: targetUser.id, role: data.role || "viewer", assigned_by: user.id,
-        });
-        await supabase.from("profiles").update({
-          is_employee: true, department: data.department || null,
-        }).eq("user_id", targetUser.id);
-
-        await logAudit("add_employee", { email: data.email, role: data.role, department: data.department });
-        return new Response(JSON.stringify({ success: true, userId: targetUser.id }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        await logAction("update_user", updates);
+        return json({ success: true });
       }
 
+      // ── RESET USER CREDITS ──
+      case "reset_credits": {
+        if (!targetUserId) throw new Error("targetUserId required");
+        await supabase.from("profiles").update({ generation_used: 0 }).eq("user_id", targetUserId);
+        await logAction("reset_credits", {});
+        return json({ success: true });
+      }
+
+      // ── BULK RESET ALL CREDITS ──
+      case "bulk_reset_credits": {
+        await supabase.from("profiles").update({ generation_used: 0 }).gte("generation_used", 0);
+        await logAction("bulk_reset_credits", {});
+        return json({ success: true });
+      }
+
+      // ── GET GENERATION LOGS ──
+      case "get_generations": {
+        const { data: logs } = await supabase
+          .from("generation_logs")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(actionData?.limit || 200);
+        return json({ generations: logs || [] });
+      }
+
+      // ── GET AUDIT LOGS ──
       case "get_audit_logs": {
         const { data: logs } = await supabase
-          .from("audit_logs").select("*").order("created_at", { ascending: false }).limit(200);
-        return new Response(JSON.stringify({ logs: logs || [] }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+          .from("admin_logs")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(200);
+        return json({ logs: logs || [] });
       }
 
+      // ── ASSIGN ADMIN ROLE ──
+      case "assign_admin": {
+        if (!targetUserId) throw new Error("targetUserId required");
+        // Check if already admin
+        const { data: existing } = await supabase
+          .from("user_roles").select("id").eq("user_id", targetUserId).eq("role", "admin");
+        if (!existing || existing.length === 0) {
+          await supabase.from("user_roles").insert({ user_id: targetUserId, role: "admin" });
+        }
+        await logAction("assign_admin", {});
+        return json({ success: true });
+      }
+
+      // ── REVOKE ADMIN ROLE ──
+      case "revoke_admin": {
+        if (!targetUserId) throw new Error("targetUserId required");
+        // Don't allow revoking own admin
+        if (targetUserId === user.id) return json({ error: "Cannot revoke own admin role" }, 400);
+        await supabase.from("user_roles").delete().eq("user_id", targetUserId).eq("role", "admin");
+        await logAction("revoke_admin", {});
+        return json({ success: true });
+      }
+
+      // ── DELETE USER ──
       case "delete_user": {
         if (!targetUserId) throw new Error("targetUserId required");
-        const { data: targetPriority } = await supabase.rpc("get_user_priority", { _user_id: targetUserId });
-        if ((targetPriority || 1) >= actorPriority) {
-          return new Response(JSON.stringify({ error: "Cannot delete a user with equal or higher priority" }), {
-            status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        await logAudit("delete_user", {});
+        if (targetUserId === user.id) return json({ error: "Cannot delete yourself" }, 400);
+        await logAction("delete_user", {});
         await supabase.auth.admin.deleteUser(targetUserId);
-        return new Response(JSON.stringify({ success: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return json({ success: true });
       }
 
       default:
-        return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return json({ error: `Unknown action: ${action}` }, 400);
     }
   } catch (error) {
     console.error("admin-actions error:", error);
