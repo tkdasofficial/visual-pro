@@ -6,21 +6,26 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Users, BarChart3, FileText, CreditCard, Search, RefreshCw,
   AlertTriangle, ChevronDown, LogOut, Shield, Eye, Check, X,
-  Settings, Zap, Image as ImageIcon, Clock,
+  Settings, Zap, Image as ImageIcon, Clock, MessageSquare, Bell,
+  Download, Copy, Trash2, Mail, Phone, Calendar, TrendingUp,
+  UserCheck, UserX, Send,
 } from "lucide-react";
 
-type AdminTab = "dashboard" | "users" | "payments" | "generations" | "logs";
+type AdminTab = "dashboard" | "users" | "payments" | "generations" | "feedback" | "notifications" | "logs";
 
 interface UserRecord {
   user_id: string;
   full_name: string | null;
   email: string;
+  whatsapp_number: string | null;
   subscription_plan: string;
   subscription_status: string;
+  subscription_expiry: string | null;
   generation_limit: number;
   generation_used: number;
-  subscription_expiry: string | null;
+  billing_cycle_start: string | null;
   created_at: string;
+  updated_at?: string;
   roles: string[];
 }
 
@@ -58,6 +63,16 @@ interface AuditRecord {
   target_user_id: string | null;
   action: string;
   details: any;
+  created_at: string;
+}
+
+interface FeedbackRecord {
+  id: string;
+  user_id: string;
+  message: string;
+  category: string;
+  status: string;
+  admin_response: string | null;
   created_at: string;
 }
 
@@ -99,41 +114,32 @@ export default function AdminPage() {
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [generations, setGenerations] = useState<GenerationRecord[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditRecord[]>([]);
+  const [feedbacks, setFeedbacks] = useState<FeedbackRecord[]>([]);
   const [fetching, setFetching] = useState(false);
   const [search, setSearch] = useState("");
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [selectedUserDetail, setSelectedUserDetail] = useState<UserRecord | null>(null);
   const [paymentNotes, setPaymentNotes] = useState<Record<string, string>>({});
+  const [feedbackReply, setFeedbackReply] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const [paymentFilter, setPaymentFilter] = useState<string>("all");
+  const [genFilter, setGenFilter] = useState<string>("all");
+  const [notifTitle, setNotifTitle] = useState("");
+  const [notifMessage, setNotifMessage] = useState("");
+  const [notifTarget, setNotifTarget] = useState<"all" | "specific">("all");
+  const [notifUserId, setNotifUserId] = useState("");
 
   const load = useCallback(async (what: AdminTab) => {
     setFetching(true);
     try {
       switch (what) {
-        case "dashboard": {
-          const s = await callAdmin("get_stats");
-          setStats(s);
-          break;
-        }
-        case "users": {
-          const r = await callAdmin("get_users");
-          setUsers(r.users || []);
-          break;
-        }
-        case "payments": {
-          const r = await callAdmin("get_payments");
-          setPayments(r.payments || []);
-          break;
-        }
-        case "generations": {
-          const r = await callAdmin("get_generations");
-          setGenerations(r.generations || []);
-          break;
-        }
-        case "logs": {
-          const r = await callAdmin("get_audit_logs");
-          setAuditLogs(r.logs || []);
-          break;
-        }
+        case "dashboard": { const s = await callAdmin("get_stats"); setStats(s); break; }
+        case "users": { const r = await callAdmin("get_users"); setUsers(r.users || []); break; }
+        case "payments": { const r = await callAdmin("get_payments"); setPayments(r.payments || []); break; }
+        case "generations": { const r = await callAdmin("get_generations", undefined, { limit: 500 }); setGenerations(r.generations || []); break; }
+        case "feedback": { const r = await callAdmin("get_feedback"); setFeedbacks(r.feedback || []); break; }
+        case "logs": { const r = await callAdmin("get_audit_logs"); setAuditLogs(r.logs || []); break; }
+        case "notifications": break;
       }
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -151,7 +157,7 @@ export default function AdminPage() {
   }, [authLoading, isAdmin]);
 
   useEffect(() => {
-    if (!authLoading && isAdmin && (tab === "generations" || tab === "logs")) {
+    if (!authLoading && isAdmin && (tab === "generations" || tab === "logs" || tab === "feedback")) {
       load(tab);
     }
   }, [tab, authLoading, isAdmin]);
@@ -164,6 +170,7 @@ export default function AdminPage() {
       load("users");
       load("dashboard");
       if (tab === "payments") load("payments");
+      if (tab === "feedback") load("feedback");
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
@@ -174,6 +181,51 @@ export default function AdminPage() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/login");
+  };
+
+  const handleSendNotification = async () => {
+    if (!notifTitle.trim() || !notifMessage.trim()) return;
+    setBusy("notif");
+    try {
+      await callAdmin("send_notification", undefined, {
+        title: notifTitle.trim(),
+        message: notifMessage.trim(),
+        target: notifTarget,
+        userId: notifTarget === "specific" ? notifUserId.trim() : undefined,
+      });
+      toast({ title: "Notification sent" });
+      setNotifTitle("");
+      setNotifMessage("");
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleReplyFeedback = async (feedbackId: string) => {
+    const reply = feedbackReply[feedbackId]?.trim();
+    if (!reply) return;
+    await act("fb_" + feedbackId, () => callAdmin("reply_feedback", undefined, { feedbackId, reply }), "Reply sent");
+    setFeedbackReply((prev) => ({ ...prev, [feedbackId]: "" }));
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast({ title: "Copied to clipboard" });
+  };
+
+  const exportCSV = (data: any[], filename: string) => {
+    if (!data.length) return;
+    const headers = Object.keys(data[0]);
+    const csv = [headers.join(","), ...data.map((row) => headers.map((h) => JSON.stringify(row[h] ?? "")).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${filename}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   if (authLoading) {
@@ -199,6 +251,8 @@ export default function AdminPage() {
     { id: "users", label: "Users", icon: Users, badge: users.length },
     { id: "payments", label: "Payments", icon: CreditCard, badge: payments.filter((p) => p.status === "pending").length },
     { id: "generations", label: "Generations", icon: ImageIcon },
+    { id: "feedback", label: "Feedback", icon: MessageSquare, badge: feedbacks.filter((f) => f.status === "new").length },
+    { id: "notifications", label: "Broadcast", icon: Bell },
     { id: "logs", label: "Audit Logs", icon: FileText },
   ];
 
@@ -208,6 +262,13 @@ export default function AdminPage() {
       u.email.toLowerCase().includes(search.toLowerCase()) ||
       u.user_id.toLowerCase().includes(search.toLowerCase())
   );
+
+  const filteredPayments = paymentFilter === "all" ? payments : payments.filter((p) => p.status === paymentFilter);
+  const filteredGens = genFilter === "all" ? generations : generations.filter((g) => g.status === genFilter);
+
+  // Get user generation stats for detail view
+  const getUserGenerations = (userId: string) => generations.filter((g) => g.user_id === userId);
+  const getUserPayments = (userId: string) => payments.filter((p) => p.user_id === userId);
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -221,6 +282,9 @@ export default function AdminPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => navigate("/create")} className="hidden h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs text-muted-foreground hover:text-foreground sm:flex">
+            ← App
+          </button>
           <button
             onClick={() => load(tab)}
             disabled={fetching}
@@ -234,7 +298,7 @@ export default function AdminPage() {
             className="flex h-8 items-center gap-1.5 rounded-lg bg-destructive/10 px-3 text-xs font-medium text-destructive hover:bg-destructive/20"
           >
             <LogOut className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Log Out</span>
+            Log Out
           </button>
         </div>
       </header>
@@ -252,7 +316,7 @@ export default function AdminPage() {
             }`}
           >
             <t.icon className="h-3.5 w-3.5" />
-            {t.label}
+            <span className="hidden sm:inline">{t.label}</span>
             {!!t.badge && t.badge > 0 && (
               <span className="ml-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary">
                 {t.badge}
@@ -285,7 +349,6 @@ export default function AdminPage() {
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
-              {/* Plan Distribution */}
               <div className="rounded-xl border border-border bg-card p-4">
                 <h3 className="mb-4 text-sm font-medium text-foreground">Plan Distribution</h3>
                 <div className="space-y-3">
@@ -307,7 +370,6 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* Generation Status */}
               <div className="rounded-xl border border-border bg-card p-4">
                 <h3 className="mb-4 text-sm font-medium text-foreground">Generation Status</h3>
                 <div className="space-y-3">
@@ -330,9 +392,13 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* Generations by Page */}
               <div className="rounded-xl border border-border bg-card p-4 lg:col-span-2">
-                <h3 className="mb-4 text-sm font-medium text-foreground">Generations by Page</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-medium text-foreground">Generations by Page</h3>
+                  <button onClick={() => exportCSV(Object.entries(stats.pageCounts).map(([p, c]) => ({ page: p, count: c })), "page-stats")} className="text-[10px] text-muted-foreground hover:text-foreground">
+                    <Download className="inline h-3 w-3 mr-1" />Export
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                   {Object.entries(stats.pageCounts).sort((a, b) => b[1] - a[1]).map(([page, count]) => (
                     <div key={page} className="rounded-lg bg-muted/50 p-3 text-center">
@@ -349,8 +415,8 @@ export default function AdminPage() {
         {/* ─── USERS ─── */}
         {tab === "users" && (
           <div className="space-y-4">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
+            <div className="flex flex-wrap gap-2">
+              <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
                   value={search} onChange={(e) => setSearch(e.target.value)}
@@ -358,34 +424,44 @@ export default function AdminPage() {
                   className="h-9 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-sm text-foreground outline-none focus:border-primary"
                 />
               </div>
+              <button onClick={() => exportCSV(filtered, "users-export")} className="flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs text-muted-foreground hover:text-foreground">
+                <Download className="h-3.5 w-3.5" /> Export
+              </button>
               <button
                 onClick={() => act("bulk_reset", () => callAdmin("bulk_reset_credits"), "All credits reset")}
                 disabled={!!busy}
-                className="hidden h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs text-muted-foreground hover:text-foreground sm:flex"
+                className="flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs text-muted-foreground hover:text-foreground"
               >
-                <Zap className="h-3.5 w-3.5" /> Reset All Credits
+                <Zap className="h-3.5 w-3.5" /> Reset All
               </button>
             </div>
+
+            <p className="text-xs text-muted-foreground">{filtered.length} users found</p>
 
             {/* Desktop table */}
             <div className="hidden md:block rounded-xl border border-border overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
-                    {["User", "Email", "Plan", "Credits", "Status", "Actions"].map((h) => (
-                      <th key={h} className="px-4 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
+                    {["User", "Email", "Phone", "Plan", "Credits", "Status", "Joined", "Actions"].map((h) => (
+                      <th key={h} className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((u) => (
                     <tr key={u.user_id} className="border-b border-border last:border-0 hover:bg-muted/20">
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-foreground">{u.full_name || "Anonymous"}</p>
-                        <p className="text-[10px] text-muted-foreground font-mono">{u.user_id.slice(0, 12)}…</p>
+                      <td className="px-3 py-3">
+                        <button onClick={() => setSelectedUserDetail(u)} className="text-left hover:underline">
+                          <p className="font-medium text-foreground">{u.full_name || "Anonymous"}</p>
+                          <p className="text-[10px] text-muted-foreground font-mono">{u.user_id.slice(0, 8)}…</p>
+                        </button>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 text-muted-foreground">
+                        <span className="cursor-pointer hover:text-foreground" onClick={() => copyToClipboard(u.email)}>{u.email}</span>
+                      </td>
+                      <td className="px-3 py-3 text-muted-foreground">{u.whatsapp_number || "—"}</td>
+                      <td className="px-3 py-3">
                         <select
                           value={u.subscription_plan}
                           onChange={(e) => act(u.user_id + "_plan", () => callAdmin("update_user", u.user_id, { subscription_plan: e.target.value }), "Plan updated")}
@@ -395,81 +471,51 @@ export default function AdminPage() {
                           {["explorer", "starter", "pro"].map((p) => <option key={p} value={p}>{p}</option>)}
                         </select>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3">
                         <span className="font-medium text-foreground">{u.generation_used}</span>
                         <span className="text-muted-foreground">/{u.generation_limit}</span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3">
                         <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                          u.subscription_status === "active"
-                            ? "bg-green-500/10 text-green-600 dark:text-green-400"
-                            : "bg-destructive/10 text-destructive"
-                        }`}>
-                          {u.subscription_status}
-                        </span>
-                        {u.roles.includes("admin") && (
-                          <span className="ml-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">admin</span>
-                        )}
+                          u.subscription_status === "active" ? "bg-green-500/10 text-green-600 dark:text-green-400" : "bg-destructive/10 text-destructive"
+                        }`}>{u.subscription_status}</span>
+                        {u.roles.includes("admin") && <span className="ml-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">admin</span>}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 text-muted-foreground whitespace-nowrap text-[10px]">
+                        {new Date(u.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-3 py-3">
                         <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => act(u.user_id + "_reset", () => callAdmin("reset_credits", u.user_id), "Credits reset")}
-                            disabled={!!busy}
-                            className="rounded px-2 py-1 text-[10px] font-medium bg-accent/10 text-accent hover:bg-accent/20"
-                          >
-                            Reset
+                          <button onClick={() => setSelectedUserDetail(u)} className="rounded p-1 text-muted-foreground hover:text-foreground" title="View Details">
+                            <Eye className="h-3.5 w-3.5" />
                           </button>
-                          <button
-                            onClick={() => setExpandedUser(expandedUser === u.user_id ? null : u.user_id)}
-                            className="rounded p-1 text-muted-foreground hover:text-foreground"
-                          >
+                          <button onClick={() => act(u.user_id + "_reset", () => callAdmin("reset_credits", u.user_id), "Credits reset")} disabled={!!busy} className="rounded px-2 py-1 text-[10px] font-medium bg-accent/10 text-accent hover:bg-accent/20">Reset</button>
+                          <button onClick={() => setExpandedUser(expandedUser === u.user_id ? null : u.user_id)} className="rounded p-1 text-muted-foreground hover:text-foreground">
                             <Settings className="h-3 w-3" />
                           </button>
                         </div>
                         {expandedUser === u.user_id && (
                           <div className="mt-2 space-y-2 rounded-lg border border-border bg-muted/30 p-3">
                             <div className="flex gap-2">
-                              <input
-                                type="number"
-                                defaultValue={u.generation_limit}
-                                placeholder="New limit"
+                              <input type="number" defaultValue={u.generation_limit} placeholder="New limit"
                                 className="h-7 w-20 rounded border border-border bg-background px-2 text-xs text-foreground outline-none"
                                 onBlur={(e) => {
                                   const val = parseInt(e.target.value);
-                                  if (!isNaN(val) && val !== u.generation_limit) {
-                                    act(u.user_id + "_limit", () => callAdmin("update_user", u.user_id, { generation_limit: val }), "Limit updated");
-                                  }
+                                  if (!isNaN(val) && val !== u.generation_limit) act(u.user_id + "_limit", () => callAdmin("update_user", u.user_id, { generation_limit: val }), "Limit updated");
                                 }}
                               />
                               <span className="self-center text-[10px] text-muted-foreground">credit limit</span>
                             </div>
-                            <div className="flex gap-1.5">
+                            <div className="flex gap-1.5 flex-wrap">
                               {!u.roles.includes("admin") ? (
-                                <button
-                                  onClick={() => act(u.user_id + "_admin", () => callAdmin("assign_admin", u.user_id), "Admin granted")}
-                                  className="rounded px-2 py-1 text-[10px] font-medium bg-primary/10 text-primary hover:bg-primary/20"
-                                >
-                                  Grant Admin
-                                </button>
+                                <button onClick={() => act(u.user_id + "_admin", () => callAdmin("assign_admin", u.user_id), "Admin granted")} className="rounded px-2 py-1 text-[10px] font-medium bg-primary/10 text-primary hover:bg-primary/20">Grant Admin</button>
                               ) : (
-                                <button
-                                  onClick={() => act(u.user_id + "_revoke", () => callAdmin("revoke_admin", u.user_id), "Admin revoked")}
-                                  className="rounded px-2 py-1 text-[10px] font-medium bg-destructive/10 text-destructive hover:bg-destructive/20"
-                                >
-                                  Revoke Admin
-                                </button>
+                                <button onClick={() => act(u.user_id + "_revoke", () => callAdmin("revoke_admin", u.user_id), "Admin revoked")} className="rounded px-2 py-1 text-[10px] font-medium bg-destructive/10 text-destructive hover:bg-destructive/20">Revoke Admin</button>
                               )}
                               <button
-                                onClick={() => {
-                                  if (confirm(`Delete ${u.full_name || "this user"}? This cannot be undone.`)) {
-                                    act(u.user_id + "_del", () => callAdmin("delete_user", u.user_id), "User deleted");
-                                  }
-                                }}
+                                onClick={() => { if (confirm(`Delete ${u.full_name || "this user"}? This cannot be undone.`)) act(u.user_id + "_del", () => callAdmin("delete_user", u.user_id), "User deleted"); }}
                                 className="rounded px-2 py-1 text-[10px] font-medium bg-destructive/10 text-destructive hover:bg-destructive/20"
-                              >
-                                Delete User
-                              </button>
+                              >Delete User</button>
                             </div>
                           </div>
                         )}
@@ -478,19 +524,14 @@ export default function AdminPage() {
                   ))}
                 </tbody>
               </table>
-              {filtered.length === 0 && (
-                <p className="py-10 text-center text-xs text-muted-foreground">{fetching ? "Loading…" : "No users found"}</p>
-              )}
+              {filtered.length === 0 && <p className="py-10 text-center text-xs text-muted-foreground">{fetching ? "Loading…" : "No users found"}</p>}
             </div>
 
             {/* Mobile cards */}
             <div className="space-y-2 md:hidden">
               {filtered.map((u) => (
                 <div key={u.user_id} className="rounded-xl border border-border bg-card">
-                  <button
-                    onClick={() => setExpandedUser(expandedUser === u.user_id ? null : u.user_id)}
-                    className="flex w-full items-center justify-between px-4 py-3 text-left"
-                  >
+                  <button onClick={() => setExpandedUser(expandedUser === u.user_id ? null : u.user_id)} className="flex w-full items-center justify-between px-4 py-3 text-left">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">{u.full_name || "Anonymous"}</p>
                       <p className="text-[10px] text-muted-foreground">{u.email}</p>
@@ -503,47 +544,21 @@ export default function AdminPage() {
                   </button>
                   {expandedUser === u.user_id && (
                     <div className="border-t border-border px-4 pb-4 pt-3 space-y-3">
+                      <button onClick={() => setSelectedUserDetail(u)} className="w-full rounded-lg border border-border py-1.5 text-xs text-muted-foreground hover:text-foreground">View Full Details</button>
                       <div className="grid grid-cols-2 gap-2">
-                        <select
-                          value={u.subscription_plan}
-                          onChange={(e) => act(u.user_id + "_plan", () => callAdmin("update_user", u.user_id, { subscription_plan: e.target.value }), "Plan updated")}
-                          className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none"
-                        >
+                        <select value={u.subscription_plan} onChange={(e) => act(u.user_id + "_plan", () => callAdmin("update_user", u.user_id, { subscription_plan: e.target.value }), "Plan updated")}
+                          className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none">
                           {["explorer", "starter", "pro"].map((p) => <option key={p} value={p}>{p}</option>)}
                         </select>
-                        <button
-                          onClick={() => act(u.user_id + "_reset", () => callAdmin("reset_credits", u.user_id), "Credits reset")}
-                          className="rounded-lg bg-accent/10 py-1.5 text-xs font-medium text-accent"
-                        >
-                          Reset Credits
-                        </button>
+                        <button onClick={() => act(u.user_id + "_reset", () => callAdmin("reset_credits", u.user_id), "Credits reset")} className="rounded-lg bg-accent/10 py-1.5 text-xs font-medium text-accent">Reset Credits</button>
                       </div>
                       <div className="flex gap-2">
                         {!u.roles.includes("admin") ? (
-                          <button
-                            onClick={() => act(u.user_id + "_admin", () => callAdmin("assign_admin", u.user_id), "Admin granted")}
-                            className="flex-1 rounded-lg bg-primary/10 py-1.5 text-xs font-medium text-primary"
-                          >
-                            Grant Admin
-                          </button>
+                          <button onClick={() => act(u.user_id + "_admin", () => callAdmin("assign_admin", u.user_id), "Admin granted")} className="flex-1 rounded-lg bg-primary/10 py-1.5 text-xs font-medium text-primary">Grant Admin</button>
                         ) : (
-                          <button
-                            onClick={() => act(u.user_id + "_revoke", () => callAdmin("revoke_admin", u.user_id), "Admin revoked")}
-                            className="flex-1 rounded-lg bg-destructive/10 py-1.5 text-xs font-medium text-destructive"
-                          >
-                            Revoke Admin
-                          </button>
+                          <button onClick={() => act(u.user_id + "_revoke", () => callAdmin("revoke_admin", u.user_id), "Admin revoked")} className="flex-1 rounded-lg bg-destructive/10 py-1.5 text-xs font-medium text-destructive">Revoke Admin</button>
                         )}
-                        <button
-                          onClick={() => {
-                            if (confirm(`Delete ${u.full_name || "this user"}?`)) {
-                              act(u.user_id + "_del", () => callAdmin("delete_user", u.user_id), "User deleted");
-                            }
-                          }}
-                          className="rounded-lg bg-destructive/10 px-3 py-1.5 text-xs font-medium text-destructive"
-                        >
-                          Delete
-                        </button>
+                        <button onClick={() => { if (confirm(`Delete ${u.full_name || "this user"}?`)) act(u.user_id + "_del", () => callAdmin("delete_user", u.user_id), "User deleted"); }} className="rounded-lg bg-destructive/10 px-3 py-1.5 text-xs font-medium text-destructive">Delete</button>
                       </div>
                     </div>
                   )}
@@ -556,26 +571,23 @@ export default function AdminPage() {
         {/* ─── PAYMENTS ─── */}
         {tab === "payments" && (
           <div className="space-y-4">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm text-muted-foreground">{payments.length} payment requests</p>
               <div className="flex gap-1.5 ml-auto">
-                {["pending", "approved", "rejected"].map((s) => {
-                  const count = payments.filter((p) => p.status === s).length;
-                  return (
-                    <span key={s} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                      s === "pending" ? "bg-accent/10 text-accent" :
-                      s === "approved" ? "bg-green-500/10 text-green-600" :
-                      "bg-destructive/10 text-destructive"
-                    }`}>
-                      {s}: {count}
-                    </span>
-                  );
-                })}
+                {["all", "pending", "approved", "rejected"].map((s) => (
+                  <button key={s} onClick={() => setPaymentFilter(s)}
+                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors ${paymentFilter === s ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
+                    {s} {s !== "all" ? `(${payments.filter((p) => p.status === s).length})` : ""}
+                  </button>
+                ))}
               </div>
+              <button onClick={() => exportCSV(payments, "payments-export")} className="flex h-8 items-center gap-1 rounded-lg border border-border px-2.5 text-[10px] text-muted-foreground hover:text-foreground">
+                <Download className="h-3 w-3" />
+              </button>
             </div>
 
             <div className="space-y-3">
-              {payments.map((p) => (
+              {filteredPayments.map((p) => (
                 <div key={p.id} className="rounded-xl border border-border bg-card p-4">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
@@ -584,63 +596,32 @@ export default function AdminPage() {
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
                         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary capitalize">{p.selected_plan}</span>
                         <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground capitalize">{p.payment_method.replace("_", " ")}</span>
-                        <span className="text-[10px] text-muted-foreground font-mono">TXN: {p.transaction_id}</span>
+                        <span className="cursor-pointer text-[10px] text-muted-foreground font-mono hover:text-foreground" onClick={() => copyToClipboard(p.transaction_id)}>TXN: {p.transaction_id}</span>
                       </div>
                     </div>
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                      p.status === "pending" ? "bg-accent/10 text-accent" :
-                      p.status === "approved" ? "bg-green-500/10 text-green-600" :
-                      "bg-destructive/10 text-destructive"
-                    }`}>
-                      {p.status}
-                    </span>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${p.status === "pending" ? "bg-accent/10 text-accent" : p.status === "approved" ? "bg-green-500/10 text-green-600" : "bg-destructive/10 text-destructive"}`}>{p.status}</span>
                   </div>
-
-                  {p.screenshot_url && (
-                    <a href={p.screenshot_url} target="_blank" rel="noopener noreferrer"
-                      className="mt-2 inline-flex items-center gap-1 text-[10px] text-primary hover:underline">
-                      <Eye className="h-3 w-3" /> View Screenshot
-                    </a>
-                  )}
-
+                  {p.screenshot_url && <a href={p.screenshot_url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-[10px] text-primary hover:underline"><Eye className="h-3 w-3" /> View Screenshot</a>}
                   {p.status === "pending" && (
                     <div className="mt-3 space-y-2">
-                      <input
-                        value={paymentNotes[p.id] || ""}
-                        onChange={(e) => setPaymentNotes({ ...paymentNotes, [p.id]: e.target.value })}
-                        placeholder="Admin notes (optional)…"
-                        className="h-8 w-full rounded-lg border border-input bg-background px-3 text-xs text-foreground outline-none focus:border-primary"
-                      />
+                      <input value={paymentNotes[p.id] || ""} onChange={(e) => setPaymentNotes({ ...paymentNotes, [p.id]: e.target.value })} placeholder="Admin notes (optional)…"
+                        className="h-8 w-full rounded-lg border border-input bg-background px-3 text-xs text-foreground outline-none focus:border-primary" />
                       <div className="flex gap-2">
-                        <button
-                          onClick={() => act("approve_" + p.id, () => callAdmin("approve_payment", undefined, { paymentId: p.id, notes: paymentNotes[p.id] }), "Payment approved")}
-                          disabled={!!busy}
-                          className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-green-500/10 py-2 text-xs font-medium text-green-600 hover:bg-green-500/20"
-                        >
-                          <Check className="h-3 w-3" /> Approve
-                        </button>
-                        <button
-                          onClick={() => act("reject_" + p.id, () => callAdmin("reject_payment", undefined, { paymentId: p.id, notes: paymentNotes[p.id] }), "Payment rejected")}
-                          disabled={!!busy}
-                          className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-destructive/10 py-2 text-xs font-medium text-destructive hover:bg-destructive/20"
-                        >
-                          <X className="h-3 w-3" /> Reject
-                        </button>
+                        <button onClick={() => act("approve_" + p.id, () => callAdmin("approve_payment", undefined, { paymentId: p.id, notes: paymentNotes[p.id] }), "Payment approved")} disabled={!!busy}
+                          className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-green-500/10 py-2 text-xs font-medium text-green-600 hover:bg-green-500/20"><Check className="h-3 w-3" /> Approve</button>
+                        <button onClick={() => act("reject_" + p.id, () => callAdmin("reject_payment", undefined, { paymentId: p.id, notes: paymentNotes[p.id] }), "Payment rejected")} disabled={!!busy}
+                          className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-destructive/10 py-2 text-xs font-medium text-destructive hover:bg-destructive/20"><X className="h-3 w-3" /> Reject</button>
                       </div>
                     </div>
                   )}
-
-                  {p.admin_notes && (
-                    <p className="mt-2 text-[10px] text-muted-foreground">Notes: {p.admin_notes}</p>
-                  )}
-
+                  {p.admin_notes && <p className="mt-2 text-[10px] text-muted-foreground">Notes: {p.admin_notes}</p>}
                   <p className="mt-2 text-[10px] text-muted-foreground">
                     Requested: {new Date(p.requested_at).toLocaleString()}
                     {p.processed_at && ` • Processed: ${new Date(p.processed_at).toLocaleString()}`}
                   </p>
                 </div>
               ))}
-              {payments.length === 0 && (
+              {filteredPayments.length === 0 && (
                 <div className="rounded-xl border border-dashed border-border py-14 text-center">
                   <CreditCard className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
                   <p className="text-sm font-medium text-foreground">No payment requests</p>
@@ -653,53 +634,54 @@ export default function AdminPage() {
         {/* ─── GENERATIONS ─── */}
         {tab === "generations" && (
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">{generations.length} generation logs</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm text-muted-foreground">{generations.length} generation logs</p>
+              <div className="flex gap-1.5 ml-auto">
+                {["all", "completed", "pending", "failed"].map((s) => (
+                  <button key={s} onClick={() => setGenFilter(s)}
+                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors ${genFilter === s ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>{s}</button>
+                ))}
+              </div>
+              <button onClick={() => exportCSV(generations, "generations-export")} className="flex h-8 items-center gap-1 rounded-lg border border-border px-2.5 text-[10px] text-muted-foreground hover:text-foreground">
+                <Download className="h-3 w-3" />
+              </button>
+            </div>
             <div className="hidden md:block rounded-xl border border-border overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
-                    {["Prompt", "Page", "Model", "Status", "Time"].map((h) => (
-                      <th key={h} className="px-4 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
+                    {["Prompt", "Page", "Model", "Status", "Credits", "Time"].map((h) => (
+                      <th key={h} className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {generations.map((g) => (
+                  {filteredGens.map((g) => (
                     <tr key={g.id} className="border-b border-border last:border-0 hover:bg-muted/20">
-                      <td className="px-4 py-3 max-w-[250px] truncate text-foreground">{g.prompt}</td>
-                      <td className="px-4 py-3 capitalize text-muted-foreground">{g.page}</td>
-                      <td className="px-4 py-3 text-muted-foreground font-mono text-[10px]">{g.model || "—"}</td>
-                      <td className="px-4 py-3">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                          g.status === "completed" ? "bg-green-500/10 text-green-600" :
-                          g.status === "failed" ? "bg-destructive/10 text-destructive" :
-                          "bg-accent/10 text-accent"
-                        }`}>
-                          {g.status}
-                        </span>
+                      <td className="px-3 py-3 max-w-[250px]">
+                        <p className="truncate text-foreground">{g.prompt}</p>
+                        {g.image_url && <a href={g.image_url} target="_blank" rel="noopener noreferrer" className="text-[9px] text-accent hover:underline">View Image</a>}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                        {new Date(g.created_at).toLocaleString()}
+                      <td className="px-3 py-3 capitalize text-muted-foreground">{g.page}</td>
+                      <td className="px-3 py-3 text-muted-foreground font-mono text-[10px]">{g.model || "—"}</td>
+                      <td className="px-3 py-3">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${g.status === "completed" ? "bg-green-500/10 text-green-600" : g.status === "failed" ? "bg-destructive/10 text-destructive" : "bg-accent/10 text-accent"}`}>{g.status}</span>
                       </td>
+                      <td className="px-3 py-3 text-muted-foreground">{g.credits_used}</td>
+                      <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">{new Date(g.created_at).toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              {generations.length === 0 && <p className="py-10 text-center text-xs text-muted-foreground">No generations yet</p>}
+              {filteredGens.length === 0 && <p className="py-10 text-center text-xs text-muted-foreground">No generations</p>}
             </div>
-
-            {/* Mobile */}
             <div className="space-y-2 md:hidden">
-              {generations.map((g) => (
+              {filteredGens.map((g) => (
                 <div key={g.id} className="rounded-xl border border-border bg-card p-3">
                   <p className="truncate text-xs font-medium text-foreground">{g.prompt}</p>
                   <div className="mt-1 flex items-center gap-2">
                     <span className="text-[10px] capitalize text-muted-foreground">{g.page}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                      g.status === "completed" ? "bg-green-500/10 text-green-600" :
-                      g.status === "failed" ? "bg-destructive/10 text-destructive" :
-                      "bg-accent/10 text-accent"
-                    }`}>{g.status}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${g.status === "completed" ? "bg-green-500/10 text-green-600" : g.status === "failed" ? "bg-destructive/10 text-destructive" : "bg-accent/10 text-accent"}`}>{g.status}</span>
                     <span className="text-[10px] text-muted-foreground ml-auto">{new Date(g.created_at).toLocaleString()}</span>
                   </div>
                 </div>
@@ -708,54 +690,218 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* ─── FEEDBACK ─── */}
+        {tab === "feedback" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">{feedbacks.length} feedback entries</p>
+              <button onClick={() => exportCSV(feedbacks, "feedback-export")} className="flex h-8 items-center gap-1 rounded-lg border border-border px-2.5 text-[10px] text-muted-foreground hover:text-foreground">
+                <Download className="h-3 w-3" /> Export
+              </button>
+            </div>
+            <div className="space-y-3">
+              {feedbacks.map((f) => (
+                <div key={f.id} className="rounded-xl border border-border bg-card p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${f.status === "new" ? "bg-accent/10 text-accent" : f.status === "replied" ? "bg-green-500/10 text-green-600" : "bg-muted text-muted-foreground"}`}>{f.status}</span>
+                      <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground capitalize">{f.category}</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">{new Date(f.created_at).toLocaleString()}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-foreground">{f.message}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground font-mono">User: {f.user_id.slice(0, 8)}…</p>
+                  {f.admin_response && (
+                    <div className="mt-2 rounded-lg bg-muted/50 p-2">
+                      <p className="text-[10px] font-medium text-muted-foreground">Admin Reply:</p>
+                      <p className="text-xs text-foreground">{f.admin_response}</p>
+                    </div>
+                  )}
+                  {f.status === "new" && (
+                    <div className="mt-2 flex gap-2">
+                      <input value={feedbackReply[f.id] || ""} onChange={(e) => setFeedbackReply({ ...feedbackReply, [f.id]: e.target.value })} placeholder="Reply to feedback…"
+                        className="h-8 flex-1 rounded-lg border border-input bg-background px-3 text-xs text-foreground outline-none focus:border-primary" />
+                      <button onClick={() => handleReplyFeedback(f.id)} disabled={!!busy || !feedbackReply[f.id]?.trim()}
+                        className="flex h-8 items-center gap-1 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40"><Send className="h-3 w-3" /> Reply</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {feedbacks.length === 0 && (
+                <div className="rounded-xl border border-dashed border-border py-14 text-center">
+                  <MessageSquare className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm font-medium text-foreground">No feedback yet</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ─── NOTIFICATIONS BROADCAST ─── */}
+        {tab === "notifications" && (
+          <div className="mx-auto max-w-lg space-y-6">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">Send Notification</h2>
+              <p className="text-xs text-muted-foreground">Broadcast notifications to all users or a specific user</p>
+            </div>
+            <div className="space-y-4 rounded-xl border border-border bg-card p-4">
+              <div className="flex gap-2">
+                {(["all", "specific"] as const).map((t) => (
+                  <button key={t} onClick={() => setNotifTarget(t)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${notifTarget === t ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:text-foreground"}`}>
+                    {t === "all" ? "All Users" : "Specific User"}
+                  </button>
+                ))}
+              </div>
+              {notifTarget === "specific" && (
+                <input value={notifUserId} onChange={(e) => setNotifUserId(e.target.value)} placeholder="User ID…"
+                  className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-primary" />
+              )}
+              <input value={notifTitle} onChange={(e) => setNotifTitle(e.target.value)} placeholder="Notification title…"
+                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-primary" />
+              <textarea value={notifMessage} onChange={(e) => setNotifMessage(e.target.value)} rows={3} placeholder="Notification message…"
+                className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary" />
+              <button onClick={handleSendNotification} disabled={!notifTitle.trim() || !notifMessage.trim() || busy === "notif"}
+                className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40">
+                {busy === "notif" ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" /> : <Send className="h-3.5 w-3.5" />}
+                {busy === "notif" ? "Sending…" : "Send Notification"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ─── AUDIT LOGS ─── */}
         {tab === "logs" && (
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">{auditLogs.length} audit entries</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">{auditLogs.length} audit entries</p>
+              <button onClick={() => exportCSV(auditLogs, "audit-logs-export")} className="flex h-8 items-center gap-1 rounded-lg border border-border px-2.5 text-[10px] text-muted-foreground hover:text-foreground">
+                <Download className="h-3 w-3" /> Export
+              </button>
+            </div>
             <div className="hidden md:block rounded-xl border border-border overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
                     {["Action", "Admin", "Target", "Details", "Time"].map((h) => (
-                      <th key={h} className="px-4 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
+                      <th key={h} className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {auditLogs.map((log) => (
                     <tr key={log.id} className="border-b border-border last:border-0 hover:bg-muted/20">
-                      <td className="px-4 py-3 font-medium text-foreground capitalize whitespace-nowrap">
-                        {log.action.replace(/_/g, " ")}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-muted-foreground text-[10px]">{log.admin_user_id.slice(0, 8)}…</td>
-                      <td className="px-4 py-3 font-mono text-muted-foreground text-[10px]">{log.target_user_id ? `${log.target_user_id.slice(0, 8)}…` : "—"}</td>
-                      <td className="px-4 py-3 max-w-[200px] truncate text-muted-foreground">
-                        {log.details ? JSON.stringify(log.details) : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{new Date(log.created_at).toLocaleString()}</td>
+                      <td className="px-3 py-3 font-medium text-foreground capitalize whitespace-nowrap">{log.action.replace(/_/g, " ")}</td>
+                      <td className="px-3 py-3 font-mono text-muted-foreground text-[10px]">{log.admin_user_id.slice(0, 8)}…</td>
+                      <td className="px-3 py-3 font-mono text-muted-foreground text-[10px]">{log.target_user_id ? `${log.target_user_id.slice(0, 8)}…` : "—"}</td>
+                      <td className="px-3 py-3 max-w-[200px] truncate text-muted-foreground">{log.details ? JSON.stringify(log.details) : "—"}</td>
+                      <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">{new Date(log.created_at).toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               {auditLogs.length === 0 && <p className="py-10 text-center text-xs text-muted-foreground">No audit logs</p>}
             </div>
-
-            {/* Mobile */}
             <div className="space-y-2 md:hidden">
               {auditLogs.map((log) => (
                 <div key={log.id} className="rounded-xl border border-border bg-card p-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-medium text-foreground capitalize">{log.action.replace(/_/g, " ")}</p>
-                    <p className="text-[10px] text-muted-foreground">{new Date(log.created_at).toLocaleString()}</p>
-                  </div>
-                  {log.details && <p className="mt-1 truncate text-[10px] text-muted-foreground">{JSON.stringify(log.details)}</p>}
+                  <p className="text-xs font-medium text-foreground capitalize">{log.action.replace(/_/g, " ")}</p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">{new Date(log.created_at).toLocaleString()}</p>
                 </div>
               ))}
-              {auditLogs.length === 0 && <p className="py-10 text-center text-xs text-muted-foreground">No audit logs</p>}
             </div>
           </div>
         )}
       </div>
+
+      {/* ── USER DETAIL MODAL ── */}
+      {selectedUserDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="relative max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-xl">
+            <button onClick={() => setSelectedUserDetail(null)} className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground hover:text-foreground">
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="flex items-center gap-4 mb-6">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent text-accent-foreground text-lg font-bold">
+                {(selectedUserDetail.full_name || "U").charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">{selectedUserDetail.full_name || "Anonymous"}</h2>
+                <p className="text-xs text-muted-foreground">{selectedUserDetail.email}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-[10px] text-muted-foreground">Plan</p>
+                <p className="text-sm font-semibold capitalize text-foreground">{selectedUserDetail.subscription_plan}</p>
+              </div>
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-[10px] text-muted-foreground">Status</p>
+                <p className="text-sm font-semibold capitalize text-foreground">{selectedUserDetail.subscription_status}</p>
+              </div>
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-[10px] text-muted-foreground">Credits Used</p>
+                <p className="text-sm font-semibold text-foreground">{selectedUserDetail.generation_used} / {selectedUserDetail.generation_limit}</p>
+              </div>
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-[10px] text-muted-foreground">Roles</p>
+                <p className="text-sm font-semibold text-foreground">{selectedUserDetail.roles.join(", ")}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Mail className="h-3.5 w-3.5" />
+                <span className="cursor-pointer hover:text-foreground" onClick={() => copyToClipboard(selectedUserDetail.email)}>{selectedUserDetail.email}</span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Phone className="h-3.5 w-3.5" />
+                <span>{selectedUserDetail.whatsapp_number || "Not provided"}</span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Calendar className="h-3.5 w-3.5" />
+                <span>Joined: {new Date(selectedUserDetail.created_at).toLocaleDateString()}</span>
+              </div>
+              {selectedUserDetail.subscription_expiry && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5" />
+                  <span>Expires: {new Date(selectedUserDetail.subscription_expiry).toLocaleDateString()}</span>
+                </div>
+              )}
+              {selectedUserDetail.billing_cycle_start && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <TrendingUp className="h-3.5 w-3.5" />
+                  <span>Billing cycle: {new Date(selectedUserDetail.billing_cycle_start).toLocaleDateString()}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Copy className="h-3.5 w-3.5" />
+                <span className="cursor-pointer font-mono hover:text-foreground" onClick={() => copyToClipboard(selectedUserDetail.user_id)}>ID: {selectedUserDetail.user_id}</span>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button onClick={() => { act(selectedUserDetail.user_id + "_reset", () => callAdmin("reset_credits", selectedUserDetail.user_id), "Credits reset"); setSelectedUserDetail(null); }}
+                className="rounded-lg bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent/20">Reset Credits</button>
+              {!selectedUserDetail.roles.includes("admin") ? (
+                <button onClick={() => { act(selectedUserDetail.user_id + "_admin", () => callAdmin("assign_admin", selectedUserDetail.user_id), "Admin granted"); setSelectedUserDetail(null); }}
+                  className="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20">Grant Admin</button>
+              ) : (
+                <button onClick={() => { act(selectedUserDetail.user_id + "_revoke", () => callAdmin("revoke_admin", selectedUserDetail.user_id), "Admin revoked"); setSelectedUserDetail(null); }}
+                  className="rounded-lg bg-destructive/10 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/20">Revoke Admin</button>
+              )}
+              <button onClick={() => {
+                if (confirm(`Delete ${selectedUserDetail.full_name || "this user"}? This cannot be undone.`)) {
+                  act(selectedUserDetail.user_id + "_del", () => callAdmin("delete_user", selectedUserDetail.user_id), "User deleted");
+                  setSelectedUserDetail(null);
+                }
+              }} className="rounded-lg bg-destructive/10 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/20">Delete User</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
