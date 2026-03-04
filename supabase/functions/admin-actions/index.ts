@@ -15,29 +15,15 @@ serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (!authHeader) return json({ error: "Unauthorized" }, 401);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) return json({ error: "Unauthorized" }, 401);
 
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Verify admin role via has_role function
     const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
-    if (!isAdmin) {
-      return new Response(JSON.stringify({ error: "Forbidden" }), {
-        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (!isAdmin) return json({ error: "Forbidden" }, 403);
 
     const body = await req.json();
     const { action, targetUserId, data: actionData } = body;
@@ -51,11 +37,7 @@ serve(async (req) => {
       });
     };
 
-    const json = (d: any, status = 200) =>
-      new Response(JSON.stringify(d), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-
     switch (action) {
-      // ── GET ALL USERS ──
       case "get_users": {
         const { data: profiles } = await supabase
           .from("profiles")
@@ -64,9 +46,7 @@ serve(async (req) => {
           .limit(500);
 
         const userIds = profiles?.map((p: any) => p.user_id) || [];
-
-        const { data: roles } = await supabase
-          .from("user_roles").select("user_id, role").in("user_id", userIds);
+        const { data: roles } = await supabase.from("user_roles").select("user_id, role").in("user_id", userIds);
 
         const rolesMap: Record<string, string[]> = {};
         roles?.forEach((r: any) => {
@@ -74,7 +54,6 @@ serve(async (req) => {
           rolesMap[r.user_id].push(r.role);
         });
 
-        // Get auth user emails
         const { data: authData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
         const emailMap: Record<string, string> = {};
         authData?.users?.forEach((u: any) => { emailMap[u.id] = u.email || ""; });
@@ -88,7 +67,6 @@ serve(async (req) => {
         return json({ users: enriched });
       }
 
-      // ── GET DASHBOARD STATS ──
       case "get_stats": {
         const [profilesRes, logsRes, paymentsRes] = await Promise.all([
           supabase.from("profiles").select("subscription_plan, subscription_status, generation_limit, generation_used").limit(1000),
@@ -101,8 +79,7 @@ serve(async (req) => {
         const payments = paymentsRes.data || [];
 
         const planCounts: Record<string, number> = {};
-        let totalCreditsUsed = 0;
-        let totalCreditsLimit = 0;
+        let totalCreditsUsed = 0, totalCreditsLimit = 0;
         profiles.forEach((p: any) => {
           planCounts[p.subscription_plan] = (planCounts[p.subscription_plan] || 0) + 1;
           totalCreditsUsed += p.generation_used || 0;
@@ -117,9 +94,7 @@ serve(async (req) => {
         });
 
         const paymentStatusCounts: Record<string, number> = {};
-        payments.forEach((p: any) => {
-          paymentStatusCounts[p.status] = (paymentStatusCounts[p.status] || 0) + 1;
-        });
+        payments.forEach((p: any) => { paymentStatusCounts[p.status] = (paymentStatusCounts[p.status] || 0) + 1; });
 
         return json({
           totalUsers: profiles.length,
@@ -134,64 +109,60 @@ serve(async (req) => {
         });
       }
 
-      // ── GET PAYMENT REQUESTS ──
       case "get_payments": {
-        const { data: payments } = await supabase
-          .from("payment_requests")
-          .select("*")
-          .order("requested_at", { ascending: false })
-          .limit(200);
+        const { data: payments } = await supabase.from("payment_requests").select("*").order("requested_at", { ascending: false }).limit(200);
         return json({ payments: payments || [] });
       }
 
-      // ── APPROVE PAYMENT ──
       case "approve_payment": {
         if (!actionData?.paymentId) throw new Error("paymentId required");
-        const { data: payment } = await supabase
-          .from("payment_requests")
-          .select("*")
-          .eq("id", actionData.paymentId)
-          .single();
-
+        const { data: payment } = await supabase.from("payment_requests").select("*").eq("id", actionData.paymentId).single();
         if (!payment) return json({ error: "Payment not found" }, 404);
 
         const planLimits: Record<string, number> = { explorer: 5, starter: 50, pro: 200 };
         const newLimit = planLimits[payment.selected_plan] || 5;
 
         await Promise.all([
-          supabase.from("payment_requests").update({
-            status: "approved",
-            admin_notes: actionData.notes || "",
-            processed_at: new Date().toISOString(),
-          }).eq("id", actionData.paymentId),
+          supabase.from("payment_requests").update({ status: "approved", admin_notes: actionData.notes || "", processed_at: new Date().toISOString() }).eq("id", actionData.paymentId),
           supabase.from("profiles").update({
-            subscription_plan: payment.selected_plan,
-            subscription_status: "active",
-            generation_limit: newLimit,
-            generation_used: 0,
+            subscription_plan: payment.selected_plan, subscription_status: "active",
+            generation_limit: newLimit, generation_used: 0,
             billing_cycle_start: new Date().toISOString(),
             subscription_expiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
           }).eq("user_id", payment.user_id),
         ]);
 
+        // Send notification to user
+        await supabase.from("notifications").insert({
+          user_id: payment.user_id,
+          title: "Payment Approved",
+          message: `Your ${payment.selected_plan} plan has been activated! You now have ${newLimit} credits.`,
+          type: "success",
+        });
+
         await logAction("approve_payment", { paymentId: actionData.paymentId, plan: payment.selected_plan });
         return json({ success: true });
       }
 
-      // ── REJECT PAYMENT ──
       case "reject_payment": {
         if (!actionData?.paymentId) throw new Error("paymentId required");
-        await supabase.from("payment_requests").update({
-          status: "rejected",
-          admin_notes: actionData.notes || "",
-          processed_at: new Date().toISOString(),
-        }).eq("id", actionData.paymentId);
+        const { data: payment } = await supabase.from("payment_requests").select("user_id, selected_plan").eq("id", actionData.paymentId).single();
+
+        await supabase.from("payment_requests").update({ status: "rejected", admin_notes: actionData.notes || "", processed_at: new Date().toISOString() }).eq("id", actionData.paymentId);
+
+        if (payment) {
+          await supabase.from("notifications").insert({
+            user_id: payment.user_id,
+            title: "Payment Rejected",
+            message: `Your payment request for ${payment.selected_plan} plan was not approved. ${actionData.notes || "Please contact support for details."}`,
+            type: "warning",
+          });
+        }
 
         await logAction("reject_payment", { paymentId: actionData.paymentId });
         return json({ success: true });
       }
 
-      // ── UPDATE USER PROFILE ──
       case "update_user": {
         if (!targetUserId) throw new Error("targetUserId required");
         const updates: any = {};
@@ -208,7 +179,6 @@ serve(async (req) => {
         return json({ success: true });
       }
 
-      // ── RESET USER CREDITS ──
       case "reset_credits": {
         if (!targetUserId) throw new Error("targetUserId required");
         await supabase.from("profiles").update({ generation_used: 0 }).eq("user_id", targetUserId);
@@ -216,39 +186,77 @@ serve(async (req) => {
         return json({ success: true });
       }
 
-      // ── BULK RESET ALL CREDITS ──
       case "bulk_reset_credits": {
         await supabase.from("profiles").update({ generation_used: 0 }).gte("generation_used", 0);
         await logAction("bulk_reset_credits", {});
         return json({ success: true });
       }
 
-      // ── GET GENERATION LOGS ──
       case "get_generations": {
-        const { data: logs } = await supabase
-          .from("generation_logs")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(actionData?.limit || 200);
+        const { data: logs } = await supabase.from("generation_logs").select("*").order("created_at", { ascending: false }).limit(actionData?.limit || 200);
         return json({ generations: logs || [] });
       }
 
-      // ── GET AUDIT LOGS ──
       case "get_audit_logs": {
-        const { data: logs } = await supabase
-          .from("admin_logs")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(200);
+        const { data: logs } = await supabase.from("admin_logs").select("*").order("created_at", { ascending: false }).limit(200);
         return json({ logs: logs || [] });
       }
 
-      // ── ASSIGN ADMIN ROLE ──
+      case "get_feedback": {
+        const { data: feedback } = await supabase.from("feedback").select("*").order("created_at", { ascending: false }).limit(200);
+        return json({ feedback: feedback || [] });
+      }
+
+      case "reply_feedback": {
+        if (!actionData?.feedbackId || !actionData?.reply) throw new Error("feedbackId and reply required");
+        const { data: fb } = await supabase.from("feedback").select("user_id").eq("id", actionData.feedbackId).single();
+        
+        await supabase.from("feedback").update({ admin_response: actionData.reply, status: "replied" }).eq("id", actionData.feedbackId);
+        
+        if (fb) {
+          await supabase.from("notifications").insert({
+            user_id: fb.user_id,
+            title: "Feedback Response",
+            message: actionData.reply,
+            type: "info",
+          });
+        }
+
+        await logAction("reply_feedback", { feedbackId: actionData.feedbackId });
+        return json({ success: true });
+      }
+
+      case "send_notification": {
+        if (!actionData?.title || !actionData?.message) throw new Error("title and message required");
+        
+        if (actionData.target === "specific" && actionData.userId) {
+          await supabase.from("notifications").insert({
+            user_id: actionData.userId,
+            title: actionData.title,
+            message: actionData.message,
+            type: "info",
+          });
+        } else {
+          // Send to all users
+          const { data: allProfiles } = await supabase.from("profiles").select("user_id").limit(1000);
+          if (allProfiles && allProfiles.length > 0) {
+            const notifications = allProfiles.map((p: any) => ({
+              user_id: p.user_id,
+              title: actionData.title,
+              message: actionData.message,
+              type: "info",
+            }));
+            await supabase.from("notifications").insert(notifications);
+          }
+        }
+
+        await logAction("send_notification", { target: actionData.target, title: actionData.title });
+        return json({ success: true });
+      }
+
       case "assign_admin": {
         if (!targetUserId) throw new Error("targetUserId required");
-        // Check if already admin
-        const { data: existing } = await supabase
-          .from("user_roles").select("id").eq("user_id", targetUserId).eq("role", "admin");
+        const { data: existing } = await supabase.from("user_roles").select("id").eq("user_id", targetUserId).eq("role", "admin");
         if (!existing || existing.length === 0) {
           await supabase.from("user_roles").insert({ user_id: targetUserId, role: "admin" });
         }
@@ -256,17 +264,14 @@ serve(async (req) => {
         return json({ success: true });
       }
 
-      // ── REVOKE ADMIN ROLE ──
       case "revoke_admin": {
         if (!targetUserId) throw new Error("targetUserId required");
-        // Don't allow revoking own admin
         if (targetUserId === user.id) return json({ error: "Cannot revoke own admin role" }, 400);
         await supabase.from("user_roles").delete().eq("user_id", targetUserId).eq("role", "admin");
         await logAction("revoke_admin", {});
         return json({ success: true });
       }
 
-      // ── DELETE USER ──
       case "delete_user": {
         if (!targetUserId) throw new Error("targetUserId required");
         if (targetUserId === user.id) return json({ error: "Cannot delete yourself" }, 400);
@@ -286,3 +291,10 @@ serve(async (req) => {
     );
   }
 });
+
+function json(d: any, status = 200) {
+  return new Response(JSON.stringify(d), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}

@@ -1,36 +1,36 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Crown, Star, Check } from "lucide-react";
+import { ArrowLeft, Crown, Check } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 const plans = [
   {
-    key: "free",
-    name: "Free",
-    price: "$0",
+    key: "explorer",
+    name: "Explorer",
+    price: "Free",
     period: "forever",
-    features: ["5 daily credits", "24-hour image storage", "Basic generation features", "Community support"],
+    features: ["5 daily credits", "Basic generation features", "24-hour image storage", "Community support"],
+  },
+  {
+    key: "starter",
+    name: "Starter",
+    price: "₹499",
+    period: "/month",
+    popular: true,
+    features: ["50 daily credits", "All generation features", "3-day image storage", "Priority processing", "Character engine"],
   },
   {
     key: "pro",
     name: "Pro",
-    price: "$25",
+    price: "₹999",
     period: "/month",
-    popular: true,
-    features: ["100 daily credits", "3-day image storage", "All generation features", "Priority processing", "Character engine (unlimited)"],
-  },
-  {
-    key: "business",
-    name: "Business",
-    price: "$50",
-    period: "/month",
-    features: ["200 daily credits", "7-day image storage", "All features + API access", "Priority support", "Team collaboration", "Advanced analytics"],
+    features: ["200 daily credits", "All features + API access", "7-day image storage", "Priority support", "Unlimited characters", "Advanced analytics"],
   },
 ];
 
 export default function PlansPage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const currentPlan = profile?.plan || "free";
+  const currentPlan = profile?.plan || "explorer";
 
   return (
     <div className="mx-auto max-w-3xl p-6 space-y-6">
@@ -47,16 +47,9 @@ export default function PlansPage() {
         {plans.map((plan) => {
           const isCurrent = currentPlan === plan.key;
           return (
-            <div
-              key={plan.key}
-              className={`relative rounded-xl border p-5 space-y-4 ${
-                plan.popular ? "border-accent bg-accent/5 shadow-sm" : "border-border bg-card"
-              }`}
-            >
+            <div key={plan.key} className={`relative rounded-xl border p-5 space-y-4 ${plan.popular ? "border-accent bg-accent/5 shadow-sm" : "border-border bg-card"}`}>
               {plan.popular && (
-                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-accent px-3 py-0.5 text-[10px] font-semibold text-accent-foreground">
-                  Most Popular
-                </span>
+                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-accent px-3 py-0.5 text-[10px] font-semibold text-accent-foreground">Most Popular</span>
               )}
               <div>
                 <h3 className="text-sm font-semibold text-foreground">{plan.name}</h3>
@@ -73,14 +66,9 @@ export default function PlansPage() {
                 ))}
               </ul>
               {isCurrent ? (
-                <button disabled className="w-full rounded-lg border border-border py-2 text-xs font-medium text-muted-foreground">
-                  Current Plan
-                </button>
-              ) : plan.key === "free" ? null : (
-                <button
-                  onClick={() => navigate(`/checkout?plan=${plan.key}`)}
-                  className="w-full rounded-lg bg-primary py-2 text-xs font-medium text-primary-foreground hover:opacity-90"
-                >
+                <button disabled className="w-full rounded-lg border border-border py-2 text-xs font-medium text-muted-foreground">Current Plan</button>
+              ) : plan.key === "explorer" ? null : (
+                <button onClick={() => navigate(`/checkout?plan=${plan.key}`)} className="w-full rounded-lg bg-primary py-2 text-xs font-medium text-primary-foreground hover:opacity-90">
                   Get {plan.name}
                 </button>
               )}
@@ -89,16 +77,12 @@ export default function PlansPage() {
         })}
       </div>
 
-      {/* Enterprise */}
       <div className="rounded-xl border border-dashed border-accent/40 bg-accent/5 p-6 text-center space-y-3">
         <Crown className="mx-auto h-8 w-8 text-accent" />
         <h3 className="text-base font-semibold text-foreground">Enterprise</h3>
         <p className="text-sm text-muted-foreground">Custom credits, storage duration, and dedicated support for your team</p>
-        <button
-          onClick={() => navigate("/checkout?plan=enterprise")}
-          className="rounded-lg bg-accent px-6 py-2.5 text-sm font-medium text-accent-foreground hover:opacity-90"
-        >
-          Get Enterprise Plan
+        <button onClick={() => navigate("/support")} className="rounded-lg bg-accent px-6 py-2.5 text-sm font-medium text-accent-foreground hover:opacity-90">
+          Contact Us
         </button>
       </div>
     </div>
