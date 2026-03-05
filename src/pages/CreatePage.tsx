@@ -50,7 +50,7 @@ const stylePresets = [
   "Fantasy", "Abstract", "Minimal", "Photography", "Concept Art",
 ];
 
-const aspectRatios = ["1:1", "16:9", "9:16", "4:5", "Custom"];
+const aspectRatios = ["1:1", "16:9", "9:16", "4:5", "4:3", "3:4"];
 const resolutions = ["HD", "2K", "4K"];
 
 export default function CreatePage() {
