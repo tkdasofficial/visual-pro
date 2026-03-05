@@ -15,9 +15,12 @@ const intensityOptions = [
   { value: "strong", label: "Strong" }, { value: "maximum", label: "Maximum" },
 ];
 
+const aspectRatios = ["1:1", "16:9", "9:16", "4:5"];
+
 export default function StyleTransferPage() {
   const [style, setStyle] = useState("");
   const [intensity, setIntensity] = useState("moderate");
+  const [ratio, setRatio] = useState("1:1");
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const { generating, generatedImage, generatedFileName, generate, downloadImage, clearImage } = useGenerate();
@@ -34,7 +37,7 @@ export default function StyleTransferPage() {
     if (!uploadedImage || !style) return;
     await generate({
       prompt: `Apply ${style} art style with ${intensity} intensity to this image. Preserve the original composition and subjects.`,
-      page: "style-transfer", imageUrl: uploadedImage, style, aspectRatio: "1:1",
+      page: "style-transfer", imageUrl: uploadedImage, style, aspectRatio: ratio,
     });
   };
 
@@ -59,6 +62,14 @@ export default function StyleTransferPage() {
           </div>
           <CustomSelect label="Art Style" options={styleOptions} value={style} onChange={setStyle} placeholder="Select style" />
           <CustomSelect label="Intensity" options={intensityOptions} value={intensity} onChange={setIntensity} />
+          <div>
+            <label className="mb-2 block text-sm font-medium text-foreground">Aspect Ratio</label>
+            <div className="flex flex-wrap gap-1.5">
+              {aspectRatios.map((r) => (
+                <button key={r} onClick={() => setRatio(r)} className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${ratio === r ? "bg-accent text-accent-foreground" : "border border-border bg-secondary text-secondary-foreground hover:bg-muted"}`}>{r}</button>
+              ))}
+            </div>
+          </div>
           <button onClick={handleGenerate} disabled={!uploadedImage || !style || generating}
             className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40">
             {generating ? (<><div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" /> Transferring...</>) : (<><Sparkles className="h-3.5 w-3.5" /> Apply Style</>)}

@@ -22,17 +22,12 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
       }
       setAuthenticated(true);
 
-      // Check if user has admin roles but NOT user-level access
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", session.user.id);
-
-      const adminRoles = ["owner", "ceo", "super_admin", "director", "manager"];
-      const hasAdminRole = roles?.some((r) => adminRoles.includes(r.role)) ?? false;
-
-      // Admins with senior roles are redirected to admin panel
-      setIsAdminOnly(hasAdminRole);
+      // Check if user has admin role - admins go to admin panel
+      const { data: isAdmin } = await supabase.rpc("has_role", {
+        _user_id: session.user.id,
+        _role: "admin",
+      });
+      setIsAdminOnly(!!isAdmin);
       setLoading(false);
     };
 

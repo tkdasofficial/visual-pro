@@ -10,10 +10,13 @@ const editModeOptions = [
   { value: "upscale", label: "AI Upscale" },
 ];
 
+const aspectRatios = ["1:1", "16:9", "9:16", "4:5", "4:3"];
+
 export default function EditorPage() {
   const [editMode, setEditMode] = useState("inpaint");
   const [editPrompt, setEditPrompt] = useState("");
   const [strength, setStrength] = useState(75);
+  const [ratio, setRatio] = useState("1:1");
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const { generating, generatedImage, generatedFileName, generate, downloadImage, clearImage } = useGenerate();
@@ -33,7 +36,7 @@ export default function EditorPage() {
       editPrompt && editPrompt,
       `Edit strength: ${strength}%`,
     ].filter(Boolean).join(". ");
-    await generate({ prompt, page: "editor", imageUrl: uploadedImage, aspectRatio: "1:1" });
+    await generate({ prompt, page: "editor", imageUrl: uploadedImage, aspectRatio: ratio });
   };
 
   return (
@@ -67,6 +70,14 @@ export default function EditorPage() {
               <span className="text-xs font-medium text-foreground">{strength}%</span>
             </div>
             <input type="range" min={0} max={100} value={strength} onChange={(e) => setStrength(parseInt(e.target.value))} className="w-full accent-accent" />
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-foreground">Aspect Ratio</label>
+            <div className="flex flex-wrap gap-1.5">
+              {aspectRatios.map((r) => (
+                <button key={r} onClick={() => setRatio(r)} className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${ratio === r ? "bg-accent text-accent-foreground" : "border border-border bg-secondary text-secondary-foreground hover:bg-muted"}`}>{r}</button>
+              ))}
+            </div>
           </div>
           <button onClick={handleGenerate} disabled={!uploadedImage || generating}
             className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40">
