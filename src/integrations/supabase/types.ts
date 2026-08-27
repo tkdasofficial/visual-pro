@@ -14,16 +14,283 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      admin_logs: {
+        Row: {
+          action: string
+          admin_user_id: string
+          created_at: string
+          details: Json
+          id: string
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          admin_user_id: string
+          created_at?: string
+          details?: Json
+          id?: string
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          admin_user_id?: string
+          created_at?: string
+          details?: Json
+          id?: string
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
+      feedback: {
+        Row: {
+          admin_response: string | null
+          category: string
+          created_at: string
+          id: string
+          message: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_response?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          message: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_response?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          message?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      generation_logs: {
+        Row: {
+          created_at: string
+          credits_used: number
+          id: string
+          image_url: string | null
+          metadata: Json
+          page: string
+          prompt: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits_used?: number
+          id?: string
+          image_url?: string | null
+          metadata?: Json
+          page?: string
+          prompt?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credits_used?: number
+          id?: string
+          image_url?: string | null
+          metadata?: Json
+          page?: string
+          prompt?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          read: boolean
+          title: string
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string
+          read?: boolean
+          title: string
+          type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          read?: boolean
+          title?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      payment_requests: {
+        Row: {
+          admin_notes: string | null
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          payment_method: string
+          processed_at: string | null
+          proof_url: string | null
+          requested_at: string
+          selected_plan: Database["public"]["Enums"]["plan_type"]
+          status: Database["public"]["Enums"]["pay_status"]
+          transaction_id: string
+          updated_at: string
+          user_id: string
+          whatsapp_number: string | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          created_at?: string
+          email: string
+          full_name: string
+          id?: string
+          payment_method: string
+          processed_at?: string | null
+          proof_url?: string | null
+          requested_at?: string
+          selected_plan: Database["public"]["Enums"]["plan_type"]
+          status?: Database["public"]["Enums"]["pay_status"]
+          transaction_id: string
+          updated_at?: string
+          user_id: string
+          whatsapp_number?: string | null
+        }
+        Update: {
+          admin_notes?: string | null
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          payment_method?: string
+          processed_at?: string | null
+          proof_url?: string | null
+          requested_at?: string
+          selected_plan?: Database["public"]["Enums"]["plan_type"]
+          status?: Database["public"]["Enums"]["pay_status"]
+          transaction_id?: string
+          updated_at?: string
+          user_id?: string
+          whatsapp_number?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          billing_cycle_start: string
+          created_at: string
+          full_name: string | null
+          generation_limit: number
+          generation_used: number
+          id: string
+          subscription_expiry: string | null
+          subscription_plan: Database["public"]["Enums"]["plan_type"]
+          subscription_status: Database["public"]["Enums"]["sub_status"]
+          updated_at: string
+          user_id: string
+          whatsapp_number: string | null
+        }
+        Insert: {
+          billing_cycle_start?: string
+          created_at?: string
+          full_name?: string | null
+          generation_limit?: number
+          generation_used?: number
+          id?: string
+          subscription_expiry?: string | null
+          subscription_plan?: Database["public"]["Enums"]["plan_type"]
+          subscription_status?: Database["public"]["Enums"]["sub_status"]
+          updated_at?: string
+          user_id: string
+          whatsapp_number?: string | null
+        }
+        Update: {
+          billing_cycle_start?: string
+          created_at?: string
+          full_name?: string | null
+          generation_limit?: number
+          generation_used?: number
+          id?: string
+          subscription_expiry?: string | null
+          subscription_plan?: Database["public"]["Enums"]["plan_type"]
+          subscription_status?: Database["public"]["Enums"]["sub_status"]
+          updated_at?: string
+          user_id?: string
+          whatsapp_number?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role:
+        | "user"
+        | "admin"
+        | "manager"
+        | "director"
+        | "super_admin"
+        | "ceo"
+        | "owner"
+      pay_status: "pending" | "approved" | "rejected"
+      plan_type: "explorer" | "starter" | "pro"
+      sub_status: "active" | "expired" | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +417,19 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: [
+        "user",
+        "admin",
+        "manager",
+        "director",
+        "super_admin",
+        "ceo",
+        "owner",
+      ],
+      pay_status: ["pending", "approved", "rejected"],
+      plan_type: ["explorer", "starter", "pro"],
+      sub_status: ["active", "expired", "cancelled"],
+    },
   },
 } as const
